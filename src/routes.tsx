@@ -1,72 +1,67 @@
 import React from "react";
 
-// Views (tus pantallas)
+// Views
 import MainDashboard from "views/admin/default";
 import Analysis from "views/admin/analysis";
-// import Results from "views/admin/results";
-// import ModelInfo from "views/admin/model";
-// import About from "views/admin/about";
-
-// Auth
+import Pacientes from "views/admin/pacientes";
+import DetallePaciente from "views/admin/pacientes/DetallePaciente";
+import AntecedentesView from "views/admin/antecedentes";
 import SignIn from "views/auth/SignIn";
 
 // Icons
 import {
   MdHome,
   MdImageSearch,
-  MdBarChart,
-  MdInsights,
-  MdInfo,
+  MdPeople,
   MdLock,
+  MdMedicalServices,
+  MdAssignment,
 } from "react-icons/md";
 
-const routes = [
+const routes: RoutesType[] = [
   {
     name: "Dashboard",
     layout: "/admin",
     path: "default",
-    icon: <MdHome className="h-6 w-6" />,
+    icon: <MdHome className="h-5 w-5" />,
     component: <MainDashboard />,
   },
-
   {
     name: "Análisis de Ecografía",
     layout: "/admin",
     path: "analysis",
-    icon: <MdImageSearch className="h-6 w-6" />,
+    icon: <MdImageSearch className="h-5 w-5" />,
     component: <Analysis />,
   },
-
   {
-    name: "Resultados",
+    name: "Pacientes",
     layout: "/admin",
-    path: "results",
-    icon: <MdBarChart className="h-6 w-6" />,
-    component: <MainDashboard />, //<Results />,
+    path: "pacientes",
+    icon: <MdPeople className="h-5 w-5" />,
+    component: <Pacientes />,
   },
-
   {
-    name: "Modelo IA",
+    name: "Antecedentes Médicos",
     layout: "/admin",
-    path: "model",
-    icon: <MdInsights className="h-6 w-6" />,
-    component: <MainDashboard />, //<ModelInfo />,
+    path: "antecedentes",
+    icon: <MdAssignment className="h-5 w-5" />,
+    component: <AntecedentesView />,
   },
-
   {
-    name: "Acerca del Sistema",
+    name: "Expediente de Paciente",
     layout: "/admin",
-    path: "about",
-    icon: <MdInfo className="h-6 w-6" />,
-    component: <MainDashboard />,//<About />,
+    path: "pacientes/:id",
+    icon: <MdMedicalServices className="h-5 w-5" />,
+    component: <DetallePaciente />,
+    hideInSidebar: true,
   },
-
   {
-    name: "Sign In",
+    name: "Iniciar Sesión",
     layout: "/auth",
     path: "sign-in",
-    icon: <MdLock className="h-6 w-6" />,
+    icon: <MdLock className="h-5 w-5" />,
     component: <SignIn />,
+    hideInSidebar: true,
   },
 ];
 
