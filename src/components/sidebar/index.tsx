@@ -1,47 +1,74 @@
 /* eslint-disable */
-
 import { HiX } from "react-icons/hi";
+import { MdBiotech, MdFavorite } from "react-icons/md";
 import Links from "./components/Links";
-
-import SidebarCard from "components/sidebar/componentsrtl/SidebarCard";
 import routes from "routes";
 
 const Sidebar = (props: {
   open: boolean;
-  onClose: React.MouseEventHandler<HTMLSpanElement>;
+  onClose: (e?: any) => void;
 }) => {
   const { open, onClose } = props;
   return (
     <div
-      className={`sm:none duration-175 linear fixed !z-50 flex min-h-full flex-col bg-white pb-10 shadow-2xl shadow-white/5 transition-all dark:!bg-navy-800 dark:text-white md:!z-50 lg:!z-50 xl:!z-0 ${
-        open ? "translate-x-0" : "-translate-x-96"
+      className={`glass-sidebar duration-300 linear fixed z-40 flex h-full flex-col pb-10 transition-all shadow-2xl xl:shadow-none ${
+        open ? "translate-x-0" : "-translate-x-full"
       }`}
+      style={{ width: 280 }}
     >
+      {/* Botón cerrar móvil */}
       <span
-        className="absolute top-4 right-4 block cursor-pointer xl:hidden"
+        className="absolute top-4 right-4 block cursor-pointer xl:hidden text-white/50 hover:text-white transition-colors"
         onClick={onClose}
       >
-        <HiX />
+        <HiX size={20} />
       </span>
 
-      <div className={`mx-[56px] mt-[50px] flex items-center`}>
-        <div className="mt-1 ml-1 h-2.5 font-poppins text-[26px] font-bold uppercase text-navy-700 dark:text-white">
-          Horizon <span className="font-medium">FREE</span>
+      {/* Logo / Brand */}
+      <div className="mx-6 mt-10 flex items-center gap-3">
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{ background: "linear-gradient(135deg, #f43f5e, #a855f7, #7c3aed)" }}
+        >
+          <MdBiotech size={22} className="text-white" />
+        </div>
+        <div>
+          <p className="font-extrabold text-white text-base leading-none tracking-tight">
+            SOP<span className="font-light text-pink-400"> System</span>
+          </p>
+          <p className="text-xs text-white/40 font-medium mt-0.5">Criterios de Rotterdam</p>
         </div>
       </div>
-      <div className="mt-[58px] mb-7 h-px bg-gray-300 dark:bg-white/30" />
-      {/* Nav item */}
 
-      <ul className="mb-auto pt-1">
-        <Links routes={routes} />
+      {/* Divisor con gradiente */}
+      <div
+        className="mx-6 mt-7 mb-5 h-px"
+        style={{ background: "linear-gradient(90deg, rgba(244,63,94,0.4), rgba(124,58,237,0.4), transparent)" }}
+      />
+
+      {/* Links de navegación */}
+      <ul className="mb-auto px-3 space-y-1">
+        <Links routes={routes} {...({ onClose } as any)} />
       </ul>
 
-      {/* Free Horizon Card */}
-      <div className="flex justify-center">
-        <SidebarCard />
+      {/* Footer del sidebar */}
+      <div className="mx-6 mt-6">
+        <div
+          className="rounded-2xl p-4"
+          style={{
+            background: "linear-gradient(135deg, rgba(244,63,94,0.12), rgba(124,58,237,0.12))",
+            border: "1px solid rgba(244,63,94,0.2)",
+          }}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <MdFavorite size={14} className="text-pink-400" />
+            <span className="text-xs font-bold text-pink-300 uppercase tracking-wider">Sistema Activo</span>
+          </div>
+          <p className="text-xs text-white/50 leading-relaxed">
+            Detección de SOP asistida por IA — EfficientNet-B0 v1.0
+          </p>
+        </div>
       </div>
-
-      {/* Nav item end */}
     </div>
   );
 };
