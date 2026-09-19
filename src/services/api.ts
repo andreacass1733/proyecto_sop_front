@@ -38,11 +38,13 @@ export interface ValidacionResponse {
 // ── Predecir: envía file + consulta_id como FormData ─────────────────────
 export const predecirImagen = async (
   file: File,
-  consulta_id: string
+  consulta_id: string,
+  lado_ovario = "izquierdo"
 ): Promise<PrediccionResponse> => {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("consulta_id", consulta_id);
+  formData.append("lado_ovario", lado_ovario);
 
   const response = await fetch(`${BASE_URL}/criterio3/predecir`, {
     method: "POST",
@@ -214,5 +216,114 @@ export const guardarAntecedentes = async (
     body: JSON.stringify({ ...datos, paciente_id: pacienteId }),
   });
   if (!res.ok) throw new Error("Error al guardar antecedentes");
+  return res.json();
+};
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// CITAS Y CONSULTAS
+// ════════════════════════════════════════════════════════════════════════════
+
+export interface CitaOut {
+  id: string;
+  paciente_id: string | null;
+  medico_id: string | null;
+  fecha_atencion: string | null;
+  fecha_proxima_cita: string | null;
+  motivo: string | null;
+  observaciones: string | null;
+  estado: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CitaCreate {
+  paciente_id?: string;
+  medico_id?: string;
+  fecha_atencion?: string;
+  fecha_proxima_cita?: string;
+  motivo?: string;
+  observaciones?: string;
+  estado?: string;
+}
+
+export interface ConsultaOut {
+  id: string;
+  cita_id: string | null;
+  paciente_id: string | null;
+  medico_id: string | null;
+  motivo: string | null;
+  observaciones: string | null;
+  estado: string;
+  reentrenamiento_id: string | null;
+  fecha_proxima_cita?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConsultaCreate {
+  cita_id?: string;
+  paciente_id?: string;
+  medico_id?: string;
+  motivo?: string;
+  observaciones?: string;
+  estado?: string;
+  reentrenamiento_id?: string;
+  fecha_proxima_cita?: string;
+}
+
+// ── CITAS ──
+export const listarCitas = async (pacienteId?: string): Promise<CitaOut[]> => {
+  const url = pacienteId ? `${BASE_URL}/citas?paciente_id=${pacienteId}` : `${BASE_URL}/citas`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Error al obtener citas");
+  return res.json();
+};
+
+export const crearCita = async (datos: CitaCreate): Promise<CitaOut> => {
+  const res = await fetch(`${BASE_URL}/citas`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(datos),
+  });
+  if (!res.ok) throw new Error("Error al crear cita");
+  return res.json();
+};
+
+export const actualizarCita = async (id: string, datos: Partial<CitaCreate>): Promise<CitaOut> => {
+  const res = await fetch(`${BASE_URL}/citas/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(datos),
+  });
+  if (!res.ok) throw new Error("Error al actualizar cita");
+  return res.json();
+};
+
+// ── CONSULTAS ──
+export const listarConsultas = async (pacienteId?: string): Promise<ConsultaOut[]> => {
+  const url = pacienteId ? `${BASE_URL}/consultas?paciente_id=${pacienteId}` : `${BASE_URL}/consultas`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Error al obtener consultas");
+  return res.json();
+};
+
+export const crearConsulta = async (datos: ConsultaCreate): Promise<ConsultaOut> => {
+  const res = await fetch(`${BASE_URL}/consultas`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(datos),
+  });
+  if (!res.ok) throw new Error("Error al crear consulta");
+  return res.json();
+};
+
+export const actualizarConsulta = async (id: string, datos: Partial<ConsultaCreate>): Promise<ConsultaOut> => {
+  const res = await fetch(`${BASE_URL}/consultas/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(datos),
+  });
+  if (!res.ok) throw new Error("Error al actualizar consulta");
   return res.json();
 };

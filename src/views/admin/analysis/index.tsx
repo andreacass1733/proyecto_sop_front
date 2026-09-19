@@ -49,6 +49,7 @@ const ProbBar = ({
 const Analysis = () => {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [ladoOvario, setLadoOvario] = useState<"izquierdo" | "derecho">("izquierdo");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<PrediccionResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -94,7 +95,7 @@ const Analysis = () => {
     const consulta_id = crypto.randomUUID();
 
     try {
-      const data = await predecirImagen(file, consulta_id);
+      const data = await predecirImagen(file, consulta_id, ladoOvario);
       setResult(data);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error al procesar el archivo. Verifique la conexión con el servidor médico.");
@@ -163,10 +164,41 @@ const Analysis = () => {
           {/* ── PANEL IZQUIERDO: Carga de Imagen (5 COLS) ── */}
           <div className="lg:col-span-5 space-y-6">
             <div className="bg-white dark:bg-navy-800 rounded-3xl border border-slate-200/80 dark:border-navy-700 p-6 sm:p-7 shadow-sm">
-              <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
                 <MdUpload className="text-pink-500" size={20} />
                 Imagen de Ecografía Ovárica
               </h2>
+
+              {/* Selector de Ovario (Izquierdo vs Derecho) */}
+              <div className="mb-4">
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">
+                  Seleccionar Anatómico del Ovario:
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setLadoOvario("izquierdo")}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition ${
+                      ladoOvario === "izquierdo"
+                        ? "bg-pink-500 text-white border-pink-500 shadow-md shadow-pink-500/30"
+                        : "bg-slate-50 dark:bg-navy-700 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-navy-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    Ovario Izquierdo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLadoOvario("derecho")}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition ${
+                      ladoOvario === "derecho"
+                        ? "bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-600/30"
+                        : "bg-slate-50 dark:bg-navy-700 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-navy-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    Ovario Derecho
+                  </button>
+                </div>
+              </div>
 
               {/* Zona de Arrastre */}
               <label
