@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
-  MdMedicalServices, MdSearch, MdPerson, MdBadge, MdPhone,
-  MdEmail, MdCalendarMonth, MdSave, MdCheckCircle, MdWarning,
+  MdMedicalServices, MdSearch, MdPerson,
+  MdSave, MdCheckCircle, MdWarning,
   MdInfo, MdFemale, MdOutlineBiotech, MdFamilyRestroom, MdShield,
   MdOutlineAssignment, MdCheck, MdClose, MdRefresh
 } from "react-icons/md";
@@ -99,14 +99,13 @@ export default function AntecedentesView() {
     buscarPacientes(busqueda);
   }, [busqueda, buscarPacientes]);
 
-  // Cargar paciente por ID (ya sea seleccionado o por query param pacienteId)
+  // Cargar paciente por ID
   const cargarPacienteId = useCallback(async (id: string) => {
     setLoadingPaciente(true);
     try {
       const datosP = await obtenerPaciente(id);
       setPacienteSeleccionado(datosP);
 
-      // Cargar antecedentes
       try {
         const datosA = await obtenerAntecedentes(id);
         setForm({
@@ -131,7 +130,6 @@ export default function AntecedentesView() {
         });
       } catch (err: any) {
         if (err.message === "SIN_ANTECEDENTES") {
-          // Reset a vacíos para primer registro
           setForm({
             iniciada_vida_sexual: false,
             edad_menarquia: "",
@@ -152,7 +150,6 @@ export default function AntecedentesView() {
     }
   }, []);
 
-  // Escuchar si hay pacienteId en la URL
   useEffect(() => {
     const pId = searchParams.get("pacienteId");
     if (pId) {
@@ -220,11 +217,10 @@ export default function AntecedentesView() {
     : "";
 
   return (
-    <div className="w-full min-h-[calc(100vh-120px)] p-4 sm:p-6 lg:p-8 space-y-6">
-
+    <div className="mt-3 flex h-full flex-col gap-5">
       {/* Toast */}
       {toast && (
-        <div className={`fixed top-5 right-5 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl font-bold text-sm text-white shadow-xl animate-fade-in-up ${
+        <div className={`fixed top-5 right-5 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl font-bold text-sm text-white shadow-xl ${
           toast.tipo === "ok" ? "bg-emerald-600" : "bg-rose-600"
         }`}>
           {toast.tipo === "ok" ? <MdCheckCircle size={20} /> : <MdWarning size={20} />}
@@ -233,22 +229,21 @@ export default function AntecedentesView() {
       )}
 
       {/* ENCABEZADO DE PÁGINA */}
-      <div className="rounded-3xl p-6 sm:p-7 bg-white border border-slate-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="rounded-2xl p-6 bg-white dark:bg-navy-800 border border-gray-100 dark:border-navy-700 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner"
-            style={{ background: "linear-gradient(135deg, #f43f5e, #a855f7)" }}>
-            <MdMedicalServices size={28} className="text-white" />
+          <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-brand-500 text-white shadow-lg shadow-brand-500/30 dark:bg-brand-400 dark:text-navy-900">
+            <MdMedicalServices size={28} />
           </div>
           <div>
-            <h1 className="text-xl font-black text-slate-900 tracking-tight">Antecedentes Médicos y Datos Clínicos</h1>
-            <p className="text-xs text-slate-500 font-medium">Dr. Rodrigo Espinoza — Evaluación del Síndrome de Ovario Poliquístico</p>
+            <h1 className="text-xl font-bold text-navy-700 dark:text-white">Antecedentes Médicos y Datos Clínicos</h1>
+            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Evaluación clínica y factores de riesgo para el Síndrome de Ovario Poliquístico</p>
           </div>
         </div>
 
         {pacienteSeleccionado && (
           <button
             onClick={() => navigate(`/admin/pacientes/${pacienteSeleccionado.id}`)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-extrabold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 shadow-sm transition"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-navy-700 dark:text-white bg-gray-50 hover:bg-gray-100 dark:bg-navy-700 dark:hover:bg-navy-600 border border-gray-200 dark:border-navy-600 transition"
           >
             Ver expediente completo
           </button>
@@ -256,22 +251,22 @@ export default function AntecedentesView() {
       </div>
 
       {/* BUSCADOR DE PACIENTES */}
-      <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-3 relative">
-        <label className="block text-xs font-black uppercase tracking-wider text-slate-700">
+      <div className="bg-white dark:bg-navy-800 rounded-2xl p-6 border border-gray-100 dark:border-navy-700 shadow-sm space-y-3 relative">
+        <label className="block text-xs font-bold uppercase tracking-wider text-navy-700 dark:text-white">
           Seleccionar o Buscar Paciente *
         </label>
         <div className="relative">
-          <MdSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+          <MdSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={20} />
           <input
             type="text"
             placeholder="Escriba el nombre, apellido, CI o correo de la paciente..."
             value={busqueda}
             onFocus={() => setDropdownAbierto(true)}
             onChange={e => { setBusqueda(e.target.value); setDropdownAbierto(true); }}
-            className="w-full pl-11 pr-10 py-3 border border-slate-300 rounded-2xl text-sm font-semibold text-slate-900 placeholder-slate-400 bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/30 focus:border-rose-500 transition shadow-sm"
+            className="w-full pl-11 pr-10 py-3 border border-gray-200 dark:border-navy-600 rounded-xl text-sm font-medium text-navy-700 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 bg-white dark:bg-navy-700 focus:outline-none focus:ring-2 focus:ring-brand-500 transition shadow-sm"
           />
           {buscando && (
-            <MdRefresh className="absolute right-4 top-1/2 -translate-y-1/2 text-rose-500 animate-spin" size={20} />
+            <MdRefresh className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-500 animate-spin" size={20} />
           )}
         </div>
 
@@ -279,23 +274,23 @@ export default function AntecedentesView() {
         {dropdownAbierto && listaPacientes.length > 0 && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setDropdownAbierto(false)} />
-            <div className="absolute left-6 right-6 top-[88px] z-20 bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden max-h-60 overflow-y-auto">
+            <div className="absolute left-6 right-6 top-[88px] z-20 bg-white dark:bg-navy-700 rounded-xl border border-gray-200 dark:border-navy-600 shadow-2xl overflow-hidden max-h-60 overflow-y-auto">
               {listaPacientes.map((p) => (
                 <div
                   key={p.id}
                   onClick={() => seleccionarPaciente(p)}
-                  className="p-3.5 hover:bg-purple-50 cursor-pointer border-b border-slate-100 last:border-0 flex items-center justify-between transition"
+                  className="p-3.5 hover:bg-brand-50 dark:hover:bg-navy-600 cursor-pointer border-b border-gray-100 dark:border-navy-600 last:border-0 flex items-center justify-between transition"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 font-extrabold flex items-center justify-center text-xs">
+                    <div className="w-8 h-8 rounded-lg bg-brand-100 dark:bg-brand-900/40 text-brand-600 dark:text-brand-300 font-bold flex items-center justify-center text-xs">
                       {p.nombre.charAt(0)}{p.primer_apellido.charAt(0)}
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-slate-900">{p.nombre} {p.primer_apellido} {p.segundo_apellido || ""}</p>
-                      <p className="text-[11px] text-slate-400">CI: {p.ci || "Sin CI"} • Edad: {calcularEdad(p.fecha_nacimiento)}</p>
+                      <p className="text-xs font-bold text-navy-700 dark:text-white">{p.nombre} {p.primer_apellido} {p.segundo_apellido || ""}</p>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400">CI: {p.ci || "Sin CI"} • Edad: {calcularEdad(p.fecha_nacimiento)}</p>
                     </div>
                   </div>
-                  <span className="text-[11px] font-extrabold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-lg">
+                  <span className="text-[11px] font-bold text-brand-500 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/30 px-2.5 py-1 rounded-md">
                     Seleccionar
                   </span>
                 </div>
@@ -307,17 +302,17 @@ export default function AntecedentesView() {
 
       {/* SI NO HAY PACIENTE SELECCIONADO */}
       {!loadingPaciente && !pacienteSeleccionado && (
-        <div className="bg-white rounded-3xl p-12 text-center border border-slate-200/80 shadow-sm space-y-3">
-          <div className="w-16 h-16 rounded-3xl bg-purple-50 border border-purple-100 flex items-center justify-center mx-auto text-purple-600">
+        <div className="bg-white dark:bg-navy-800 rounded-2xl p-12 text-center border border-gray-100 dark:border-navy-700 shadow-sm space-y-3">
+          <div className="w-16 h-16 rounded-2xl bg-brand-50 dark:bg-navy-700 flex items-center justify-center mx-auto text-brand-500 dark:text-brand-400">
             <MdMedicalServices size={32} />
           </div>
-          <h3 className="text-base font-extrabold text-slate-800">Ningún paciente seleccionado</h3>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto">
+          <h3 className="text-base font-bold text-navy-700 dark:text-white">Ningún paciente seleccionado</h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 max-w-sm mx-auto">
             Utilice el buscador superior para seleccionar un paciente o registre un nuevo paciente para completar sus antecedentes clínicos.
           </p>
           <button
             onClick={() => navigate("/admin/pacientes")}
-            className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-extrabold text-white bg-gradient-to-r from-rose-500 to-purple-600 shadow-md"
+            className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-brand-500 hover:bg-brand-600 dark:bg-brand-400 dark:text-navy-900 shadow-md transition"
           >
             Ir a Gestión de Pacientes
           </button>
@@ -326,24 +321,24 @@ export default function AntecedentesView() {
 
       {/* LOADER */}
       {loadingPaciente && (
-        <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 shadow-sm text-xs font-extrabold text-slate-600">
+        <div className="bg-white dark:bg-navy-800 rounded-2xl p-12 text-center border border-gray-100 dark:border-navy-700 shadow-sm text-xs font-bold text-navy-700 dark:text-white">
           Cargando expediente e historial del paciente...
         </div>
       )}
 
       {/* FORMULARIO COMPLETO DE ANTECEDENTES */}
       {!loadingPaciente && pacienteSeleccionado && (
-        <div className="space-y-6 animate-fade-in-up">
+        <div className="space-y-6">
 
           {/* TARJETA DE PACIENTE SELECCIONADO */}
-          <div className="rounded-3xl p-6 bg-gradient-to-br from-purple-900 to-slate-900 text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="rounded-2xl p-6 bg-brand-500 dark:bg-navy-700 text-white shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center font-black text-xl text-rose-300 border border-white/20">
+              <div className="w-14 h-14 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center font-bold text-xl text-white border border-white/20">
                 {pacienteSeleccionado.nombre.charAt(0)}{pacienteSeleccionado.primer_apellido.charAt(0)}
               </div>
               <div>
-                <h2 className="text-lg font-black tracking-tight">{nombreCompleto}</h2>
-                <p className="text-xs text-purple-200 mt-0.5 flex items-center gap-3 flex-wrap font-medium">
+                <h2 className="text-lg font-bold tracking-tight">{nombreCompleto}</h2>
+                <p className="text-xs text-brand-100 dark:text-gray-300 mt-0.5 flex items-center gap-3 flex-wrap font-medium">
                   <span>CI: {pacienteSeleccionado.ci || "Sin CI"}</span>
                   <span>•</span>
                   <span>Edad: {calcularEdad(pacienteSeleccionado.fecha_nacimiento)}</span>
@@ -355,7 +350,7 @@ export default function AntecedentesView() {
               </div>
             </div>
 
-            <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-500/20 border border-emerald-400/40 text-emerald-300">
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-white/20 border border-white/30 text-white">
               Paciente Activo
             </span>
           </div>
@@ -363,29 +358,29 @@ export default function AntecedentesView() {
           <form onSubmit={handleSubmit} className="space-y-6">
 
             {/* SECCIÓN 1: SEXARCA Y VIDA SEXUAL */}
-            <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200/80 shadow-sm space-y-5">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                <div className="w-8 h-8 rounded-xl bg-pink-100 flex items-center justify-center text-pink-600 font-bold">
+            <div className="bg-white dark:bg-navy-800 rounded-2xl p-6 sm:p-7 border border-gray-100 dark:border-navy-700 shadow-sm space-y-5">
+              <div className="flex items-center gap-2 border-b border-gray-100 dark:border-navy-700 pb-3">
+                <div className="w-8 h-8 rounded-lg bg-pink-100 dark:bg-pink-900/40 flex items-center justify-center text-pink-600 dark:text-pink-300 font-bold">
                   <MdFemale size={20} />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-slate-900 text-sm">Sexarca / Inicio de Vida Sexual</h3>
-                  <p className="text-xs text-slate-500">Determina la aplicación de contadores obstétricos y anticoncepción</p>
+                  <h3 className="font-bold text-navy-700 dark:text-white text-sm">Sexarca / Inicio de Vida Sexual</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Determina la aplicación de contadores obstétricos y anticoncepción</p>
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                <span className="text-xs font-extrabold text-slate-800">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-gray-50 dark:bg-navy-700 p-4 rounded-xl border border-gray-200 dark:border-navy-600">
+                <span className="text-xs font-bold text-navy-700 dark:text-white">
                   ¿La paciente ha iniciado vida sexual? (Sexarca Activa) *
                 </span>
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
                     onClick={() => handleSexarca(true)}
-                    className={`px-5 py-2 rounded-xl text-xs font-extrabold transition flex items-center gap-1.5 ${
+                    className={`px-5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
                       form.iniciada_vida_sexual
-                        ? "bg-rose-500 text-white shadow-md shadow-rose-500/30"
-                        : "bg-white text-slate-600 border border-slate-300 hover:bg-slate-100"
+                        ? "bg-brand-500 text-white shadow-md dark:bg-brand-400 dark:text-navy-900"
+                        : "bg-white text-navy-700 border border-gray-200 hover:bg-gray-100 dark:bg-navy-800 dark:text-gray-300 dark:border-navy-600"
                     }`}
                   >
                     <MdCheck size={16} /> Sí (Sexarca Activa)
@@ -393,10 +388,10 @@ export default function AntecedentesView() {
                   <button
                     type="button"
                     onClick={() => handleSexarca(false)}
-                    className={`px-5 py-2 rounded-xl text-xs font-extrabold transition flex items-center gap-1.5 ${
+                    className={`px-5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
                       !form.iniciada_vida_sexual
-                        ? "bg-slate-700 text-white shadow-md"
-                        : "bg-white text-slate-600 border border-slate-300 hover:bg-slate-100"
+                        ? "bg-navy-700 text-white shadow-md dark:bg-navy-600"
+                        : "bg-white text-navy-700 border border-gray-200 hover:bg-gray-100 dark:bg-navy-800 dark:text-gray-300 dark:border-navy-600"
                     }`}
                   >
                     <MdClose size={16} /> No (Sin Sexarca)
@@ -405,39 +400,39 @@ export default function AntecedentesView() {
               </div>
 
               {!form.iniciada_vida_sexual && (
-                <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-2xl text-xs font-medium text-amber-900">
-                  <MdInfo size={22} className="text-amber-600 flex-shrink-0" />
+                <div className="flex items-center gap-3 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-xl text-xs font-medium text-amber-900 dark:text-amber-300">
+                  <MdInfo size={22} className="text-amber-600 dark:text-amber-400 flex-shrink-0" />
                   <span>
-                    <strong>Paciente sin inicio de vida sexual:</strong> Los datos obstétricos (gestas, partos, abortos) y métodos anticonceptivos se ocultan de la ficha clínica.
+                    <strong>Paciente sin inicio de vida sexual:</strong> Los datos obstétricos (gestas, partos, abortos) y métodos anticonceptivos se ocultan automáticamente.
                   </span>
                 </div>
               )}
             </div>
 
             {/* SECCIÓN 2: HISTORIAL GINECOLÓGICO */}
-            <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200/80 shadow-sm space-y-5">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                <div className="w-8 h-8 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600 font-bold">
+            <div className="bg-white dark:bg-navy-800 rounded-2xl p-6 sm:p-7 border border-gray-100 dark:border-navy-700 shadow-sm space-y-5">
+              <div className="flex items-center gap-2 border-b border-gray-100 dark:border-navy-700 pb-3">
+                <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center text-purple-600 dark:text-purple-300 font-bold">
                   <MdOutlineBiotech size={20} />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-slate-900 text-sm">Historial Menstrual / Ginecológico</h3>
-                  <p className="text-xs text-slate-500">Parámetros fundamentales para los Criterios Rotterdam SOP</p>
+                  <h3 className="font-bold text-navy-700 dark:text-white text-sm">Historial Menstrual / Ginecológico</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Parámetros fundamentales para los Criterios Rotterdam SOP</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Edad Menarquia (Años)</label>
+                  <label className="block text-xs font-bold text-navy-700 dark:text-white mb-1">Edad Menarquia (Años)</label>
                   <input type="number" min={8} max={20} value={form.edad_menarquia}
                     onChange={e => setForm(p => ({ ...p, edad_menarquia: e.target.value === "" ? "" : Number(e.target.value) }))}
-                    placeholder="Ej: 12" className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white" />
+                    placeholder="Ej: 12" className="w-full border border-gray-200 dark:border-navy-600 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-navy-700 dark:text-white bg-white dark:bg-navy-700 focus:outline-none focus:ring-2 focus:ring-brand-500" />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Patrón del Ciclo Menstrual *</label>
+                  <label className="block text-xs font-bold text-navy-700 dark:text-white mb-1">Patrón del Ciclo Menstrual *</label>
                   <select value={form.tipo_ciclo} onChange={e => setForm(p => ({ ...p, tipo_ciclo: e.target.value }))}
-                    className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white">
+                    className="w-full border border-gray-200 dark:border-navy-600 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-navy-700 dark:text-white bg-white dark:bg-navy-700 focus:outline-none focus:ring-2 focus:ring-brand-500">
                     <option value="regular">Regular (21-35 días)</option>
                     <option value="irregular">Irregular</option>
                     <option value="oligomenorrea">Oligomenorrea (&gt;35 días)</option>
@@ -446,73 +441,73 @@ export default function AntecedentesView() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Duración Sangrado / Ciclo (Días)</label>
+                  <label className="block text-xs font-bold text-navy-700 dark:text-white mb-1">Duración Sangrado / Ciclo (Días)</label>
                   <input type="number" min={1} max={90} value={form.duracion_ciclo_habitual}
                     onChange={e => setForm(p => ({ ...p, duracion_ciclo_habitual: e.target.value === "" ? "" : Number(e.target.value) }))}
-                    placeholder="Ej: 5 o 28" className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white" />
-                  <p className="text-[11px] text-slate-400 mt-1">Días habituales de sangrado (ej. 5) o ciclo (ej. 28)</p>
+                    placeholder="Ej: 5 o 28" className="w-full border border-gray-200 dark:border-navy-600 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-navy-700 dark:text-white bg-white dark:bg-navy-700 focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Días habituales de sangrado (ej. 5) o ciclo (ej. 28)</p>
                 </div>
               </div>
             </div>
 
             {/* SECCIÓN 3: OBSTÉTRICO Y ANTICONCEPCIÓN (SOLO SI TIENE VIDA SEXUAL INICIADA) */}
             {form.iniciada_vida_sexual && (
-              <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200/80 shadow-sm space-y-5 animate-fade-in-up">
-                <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                  <div className="w-8 h-8 rounded-xl bg-rose-100 flex items-center justify-center text-rose-600 font-bold">
+              <div className="bg-white dark:bg-navy-800 rounded-2xl p-6 sm:p-7 border border-gray-100 dark:border-navy-700 shadow-sm space-y-5">
+                <div className="flex items-center gap-2 border-b border-gray-100 dark:border-navy-700 pb-3">
+                  <div className="w-8 h-8 rounded-lg bg-rose-100 dark:bg-rose-900/40 flex items-center justify-center text-rose-600 dark:text-rose-300 font-bold">
                     <MdFamilyRestroom size={20} />
                   </div>
                   <div>
-                    <h3 className="font-extrabold text-slate-900 text-sm">Historial Obstétrico y Anticoncepción</h3>
-                    <p className="text-xs text-slate-500">Información clínica para pacientes con sexarca activa</p>
+                    <h3 className="font-bold text-navy-700 dark:text-white text-sm">Historial Obstétrico y Anticoncepción</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Información clínica para pacientes con sexarca activa</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Gestas</label>
+                    <label className="block text-xs font-bold text-navy-700 dark:text-white mb-1">Gestas</label>
                     <input type="number" min={0} value={form.gestas}
                       onChange={e => setForm(p => ({ ...p, gestas: Number(e.target.value) }))}
-                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-900 bg-white" />
+                      className="w-full border border-gray-200 dark:border-navy-600 rounded-xl px-3 py-2 text-sm font-bold text-navy-700 dark:text-white bg-white dark:bg-navy-700" />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Partos</label>
+                    <label className="block text-xs font-bold text-navy-700 dark:text-white mb-1">Partos</label>
                     <input type="number" min={0} value={form.partos}
                       onChange={e => setForm(p => ({ ...p, partos: Number(e.target.value) }))}
-                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-900 bg-white" />
+                      className="w-full border border-gray-200 dark:border-navy-600 rounded-xl px-3 py-2 text-sm font-bold text-navy-700 dark:text-white bg-white dark:bg-navy-700" />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Cesáreas</label>
+                    <label className="block text-xs font-bold text-navy-700 dark:text-white mb-1">Cesáreas</label>
                     <input type="number" min={0} value={form.cesareas}
                       onChange={e => setForm(p => ({ ...p, cesareas: Number(e.target.value) }))}
-                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-900 bg-white" />
+                      className="w-full border border-gray-200 dark:border-navy-600 rounded-xl px-3 py-2 text-sm font-bold text-navy-700 dark:text-white bg-white dark:bg-navy-700" />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Abortos</label>
+                    <label className="block text-xs font-bold text-navy-700 dark:text-white mb-1">Abortos</label>
                     <input type="number" min={0} value={form.abortos}
                       onChange={e => setForm(p => ({ ...p, abortos: Number(e.target.value) }))}
-                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-900 bg-white" />
+                      className="w-full border border-gray-200 dark:border-navy-600 rounded-xl px-3 py-2 text-sm font-bold text-navy-700 dark:text-white bg-white dark:bg-navy-700" />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Hijos Vivos</label>
+                    <label className="block text-xs font-bold text-navy-700 dark:text-white mb-1">Hijos Vivos</label>
                     <input type="number" min={0} value={form.hijos_vivos}
                       onChange={e => setForm(p => ({ ...p, hijos_vivos: Number(e.target.value) }))}
-                      className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-900 bg-white" />
+                      className="w-full border border-gray-200 dark:border-navy-600 rounded-xl px-3 py-2 text-sm font-bold text-navy-700 dark:text-white bg-white dark:bg-navy-700" />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                  <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
-                    <span className="text-xs font-bold text-slate-700">¿Usa Anticonceptivos actualmente?</span>
+                  <div className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-navy-700 rounded-xl border border-gray-200 dark:border-navy-600">
+                    <span className="text-xs font-bold text-navy-700 dark:text-white">¿Usa Anticonceptivos actualmente?</span>
                     <input type="checkbox" checked={form.usa_anticonceptivos}
-                      onChange={e => setForm(p => ({ ...p, usa_anticonceptivos: e.target.checked }))} className="w-5 h-5 text-rose-600 rounded" />
+                      onChange={e => setForm(p => ({ ...p, usa_anticonceptivos: e.target.checked }))} className="w-5 h-5 text-brand-500 rounded" />
                   </div>
                   {form.usa_anticonceptivos && (
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">Tipo de Anticonceptivo</label>
+                      <label className="block text-xs font-bold text-navy-700 dark:text-white mb-1">Tipo de Anticonceptivo</label>
                       <input type="text" value={form.tipo_anticonceptivo}
                         onChange={e => setForm(p => ({ ...p, tipo_anticonceptivo: e.target.value }))}
-                        placeholder="Ej: ACO Combinados, DIU Levonorgestrel, Implante" className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white" />
+                        placeholder="Ej: ACO Combinados, DIU Levonorgestrel, Implante" className="w-full border border-gray-200 dark:border-navy-600 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-navy-700 dark:text-white bg-white dark:bg-navy-700" />
                     </div>
                   )}
                 </div>
@@ -520,64 +515,64 @@ export default function AntecedentesView() {
             )}
 
             {/* SECCIÓN 4: FACTORES DE RIESGO Y COMORBILIDADES */}
-            <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200/80 shadow-sm space-y-5">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600 font-bold">
+            <div className="bg-white dark:bg-navy-800 rounded-2xl p-6 sm:p-7 border border-gray-100 dark:border-navy-700 shadow-sm space-y-5">
+              <div className="flex items-center gap-2 border-b border-gray-100 dark:border-navy-700 pb-3">
+                <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center text-amber-600 dark:text-amber-300 font-bold">
                   <MdShield size={20} />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-slate-900 text-sm">Factores de Riesgo SOP y Endocrinopatías</h3>
-                  <p className="text-xs text-slate-500">Antecedentes personales, metabólicos y hormonales</p>
+                  <h3 className="font-bold text-navy-700 dark:text-white text-sm">Factores de Riesgo SOP y Endocrinopatías</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Antecedentes personales, metabólicos y hormonales</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <label className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-200 cursor-pointer">
-                  <span className="text-xs font-bold text-slate-800">Familiar con SOP</span>
-                  <input type="checkbox" checked={form.familiar_con_sop} onChange={e => setForm(p => ({ ...p, familiar_con_sop: e.target.checked }))} className="w-5 h-5 text-rose-600 rounded" />
+                <label className="flex items-center justify-between p-3.5 rounded-xl bg-gray-50 dark:bg-navy-700 border border-gray-200 dark:border-navy-600 cursor-pointer">
+                  <span className="text-xs font-bold text-navy-700 dark:text-white">Familiar con SOP</span>
+                  <input type="checkbox" checked={form.familiar_con_sop} onChange={e => setForm(p => ({ ...p, familiar_con_sop: e.target.checked }))} className="w-5 h-5 text-brand-500 rounded" />
                 </label>
 
-                <label className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-200 cursor-pointer">
-                  <span className="text-xs font-bold text-slate-800">Familiar con Diabetes</span>
-                  <input type="checkbox" checked={form.familiar_con_diabetes} onChange={e => setForm(p => ({ ...p, familiar_con_diabetes: e.target.checked }))} className="w-5 h-5 text-rose-600 rounded" />
+                <label className="flex items-center justify-between p-3.5 rounded-xl bg-gray-50 dark:bg-navy-700 border border-gray-200 dark:border-navy-600 cursor-pointer">
+                  <span className="text-xs font-bold text-navy-700 dark:text-white">Familiar con Diabetes</span>
+                  <input type="checkbox" checked={form.familiar_con_diabetes} onChange={e => setForm(p => ({ ...p, familiar_con_diabetes: e.target.checked }))} className="w-5 h-5 text-brand-500 rounded" />
                 </label>
 
-                <label className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-200 cursor-pointer">
-                  <span className="text-xs font-bold text-slate-800">Diabetes Personal</span>
-                  <input type="checkbox" checked={form.diabetes} onChange={e => setForm(p => ({ ...p, diabetes: e.target.checked }))} className="w-5 h-5 text-rose-600 rounded" />
+                <label className="flex items-center justify-between p-3.5 rounded-xl bg-gray-50 dark:bg-navy-700 border border-gray-200 dark:border-navy-600 cursor-pointer">
+                  <span className="text-xs font-bold text-navy-700 dark:text-white">Diabetes Personal</span>
+                  <input type="checkbox" checked={form.diabetes} onChange={e => setForm(p => ({ ...p, diabetes: e.target.checked }))} className="w-5 h-5 text-brand-500 rounded" />
                 </label>
 
-                <label className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-200 cursor-pointer">
-                  <span className="text-xs font-bold text-slate-800">Hipotiroidismo</span>
-                  <input type="checkbox" checked={form.hipotiroidismo} onChange={e => setForm(p => ({ ...p, hipotiroidismo: e.target.checked }))} className="w-5 h-5 text-rose-600 rounded" />
+                <label className="flex items-center justify-between p-3.5 rounded-xl bg-gray-50 dark:bg-navy-700 border border-gray-200 dark:border-navy-600 cursor-pointer">
+                  <span className="text-xs font-bold text-navy-700 dark:text-white">Hipotiroidismo</span>
+                  <input type="checkbox" checked={form.hipotiroidismo} onChange={e => setForm(p => ({ ...p, hipotiroidismo: e.target.checked }))} className="w-5 h-5 text-brand-500 rounded" />
                 </label>
 
-                <label className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-200 cursor-pointer">
-                  <span className="text-xs font-bold text-slate-800">Hiperprolactinemia</span>
-                  <input type="checkbox" checked={form.hiperprolactinemia} onChange={e => setForm(p => ({ ...p, hiperprolactinemia: e.target.checked }))} className="w-5 h-5 text-rose-600 rounded" />
+                <label className="flex items-center justify-between p-3.5 rounded-xl bg-gray-50 dark:bg-navy-700 border border-gray-200 dark:border-navy-600 cursor-pointer">
+                  <span className="text-xs font-bold text-navy-700 dark:text-white">Hiperprolactinemia</span>
+                  <input type="checkbox" checked={form.hiperprolactinemia} onChange={e => setForm(p => ({ ...p, hiperprolactinemia: e.target.checked }))} className="w-5 h-5 text-brand-500 rounded" />
                 </label>
 
-                <label className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-200 cursor-pointer">
-                  <span className="text-xs font-bold text-slate-800">Resistencia a la Insulina</span>
-                  <input type="checkbox" checked={form.resistencia_insulina} onChange={e => setForm(p => ({ ...p, resistencia_insulina: e.target.checked }))} className="w-5 h-5 text-rose-600 rounded" />
+                <label className="flex items-center justify-between p-3.5 rounded-xl bg-gray-50 dark:bg-navy-700 border border-gray-200 dark:border-navy-600 cursor-pointer">
+                  <span className="text-xs font-bold text-navy-700 dark:text-white">Resistencia a la Insulina</span>
+                  <input type="checkbox" checked={form.resistencia_insulina} onChange={e => setForm(p => ({ ...p, resistencia_insulina: e.target.checked }))} className="w-5 h-5 text-brand-500 rounded" />
                 </label>
               </div>
             </div>
 
             {/* SECCIÓN 5: OBSERVACIONES */}
-            <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200/80 shadow-sm space-y-4">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 font-bold">
+            <div className="bg-white dark:bg-navy-800 rounded-2xl p-6 sm:p-7 border border-gray-100 dark:border-navy-700 shadow-sm space-y-4">
+              <div className="flex items-center gap-2 border-b border-gray-100 dark:border-navy-700 pb-3">
+                <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-navy-700 flex items-center justify-center text-navy-700 dark:text-white font-bold">
                   <MdOutlineAssignment size={20} />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-slate-900 text-sm">Observaciones y Notas Clínicas</h3>
-                  <p className="text-xs text-slate-500">Anotaciones médicas del Dr. Rodrigo Espinoza</p>
+                  <h3 className="font-bold text-navy-700 dark:text-white text-sm">Observaciones y Notas Clínicas</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Anotaciones médicas del profesional</p>
                 </div>
               </div>
 
               <textarea rows={4} value={form.observaciones} onChange={e => setForm(p => ({ ...p, observaciones: e.target.value }))}
-                placeholder="Escriba notas sobre los antecedentes clínicos..." className="w-full border border-slate-300 rounded-2xl p-4 text-xs font-semibold text-slate-900 bg-white" />
+                placeholder="Escriba notas sobre los antecedentes clínicos..." className="w-full border border-gray-200 dark:border-navy-600 rounded-xl p-4 text-xs font-medium text-navy-700 dark:text-white bg-white dark:bg-navy-700 focus:outline-none focus:ring-2 focus:ring-brand-500" />
             </div>
 
             {/* BOTÓN GUARDAR ANTECEDENTES */}
@@ -585,8 +580,7 @@ export default function AntecedentesView() {
               <button
                 type="submit"
                 disabled={saving}
-                className="flex items-center gap-2 px-8 py-4 rounded-2xl font-extrabold text-sm text-white shadow-xl hover:shadow-2xl transition disabled:opacity-50"
-                style={{ background: "linear-gradient(135deg, #f43f5e, #a855f7)", boxShadow: "0 4px 20px rgba(244,63,94,0.35)" }}
+                className="flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-sm text-white bg-brand-500 hover:bg-brand-600 dark:bg-brand-400 dark:text-navy-900 shadow-lg hover:shadow-xl transition disabled:opacity-50"
               >
                 {saving ? "Guardando expediente..." : (
                   <>

@@ -13,5 +13,6 @@ declare global {
 		path: string;
 		secondary?: boolean;
 		hideInSidebar?: boolean;
+		category?: string;
 	}
 }

@@ -680,12 +680,12 @@ const Pacientes = () => {
       {/* ── TABLA DE PACIENTES ── */}
       <div className="rounded-3xl overflow-hidden bg-white border border-slate-200/80 shadow-sm">
         <div className="grid grid-cols-12 gap-3 px-6 py-3.5 text-xs font-black uppercase tracking-wider text-slate-500 bg-slate-50 border-b border-slate-200">
-          <span className="col-span-4">Paciente</span>
+          <span className="col-span-3">Paciente</span>
           <span className="col-span-2 hidden sm:block">Cédula</span>
-          <span className="col-span-2 hidden md:block">Contacto</span>
+          <span className="col-span-3 hidden md:block">Contacto</span>
           <span className="col-span-1 hidden lg:block">Edad</span>
-          <span className="col-span-1">Estado</span>
-          <span className="col-span-2 text-right">Acciones</span>
+          <span className="col-span-2 text-center">Estado</span>
+          <span className="col-span-1 text-center">Acciones</span>
         </div>
 
         {loading && (
@@ -714,7 +714,7 @@ const Pacientes = () => {
             onClick={() => navigate(`/admin/pacientes/${p.id}`)}
             className="grid grid-cols-12 gap-3 px-6 py-4 items-center cursor-pointer transition-colors hover:bg-purple-50/40 border-b border-slate-100 last:border-0"
           >
-            <div className="col-span-4 flex items-center gap-3">
+            <div className="col-span-3 flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 font-black text-sm select-none shadow-sm"
                 style={{
                   background: i % 2 === 0
@@ -738,7 +738,7 @@ const Pacientes = () => {
               <span className="truncate">{p.ci ?? "—"}</span>
             </div>
 
-            <div className="col-span-2 hidden md:flex items-center gap-1.5 text-slate-700 text-xs font-semibold">
+            <div className="col-span-3 hidden md:flex items-center gap-1.5 text-slate-700 text-xs font-semibold">
               <MdPhone size={16} className="text-slate-400 flex-shrink-0" />
               <span className="truncate">{p.telefono ?? "—"}</span>
             </div>
@@ -748,7 +748,7 @@ const Pacientes = () => {
               <span>{calcularEdad(p.fecha_nacimiento)}</span>
             </div>
 
-            <div className="col-span-1">
+            <div className="col-span-2 flex justify-center">
               <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold ${
                 p.activo ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-amber-50 text-amber-700 border border-amber-200"
               }`}>
@@ -758,7 +758,7 @@ const Pacientes = () => {
             </div>
 
             {/* Acciones */}
-            <div className="col-span-2 flex items-center justify-end gap-1.5" onClick={e => e.stopPropagation()}>
+            <div className="col-span-1 flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}>
               <button title="Editar paciente"
                 onClick={e => { e.stopPropagation(); setEditando(p); setModalAbierto(true); }}
                 className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-500 hover:text-purple-600 hover:bg-purple-100/60 transition-all">
