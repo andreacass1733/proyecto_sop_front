@@ -1,4 +1,4 @@
-const BASE_URL = "http://localhost:8000";
+const BASE_URL = "http://localhost:8080";
 
 // ── Respuesta del endpoint POST /criterio3/predecir ───────────────────────
 export interface PrediccionResponse {
