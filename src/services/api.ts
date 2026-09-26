@@ -1,4 +1,4 @@
-const BASE_URL = "http://localhost:8080";
+const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
 // ── Respuesta del endpoint POST /criterio3/predecir ───────────────────────
 export interface PrediccionResponse {
@@ -15,6 +15,7 @@ export interface PrediccionResponse {
   mapa_calor_url: string | null;
   version_modelo: string;
   created_at: string;
+  lado_ovario?: string;
 }
 
 // ── Respuesta del endpoint GET /criterio3/stats ───────────────────────────
@@ -38,12 +39,14 @@ export interface ValidacionResponse {
 // ── Predecir: envía file + consulta_id como FormData ─────────────────────
 export const predecirImagen = async (
   file: File,
-  consulta_id: string,
+  paciente_id?: string,
+  consulta_id?: string,
   lado_ovario = "izquierdo"
 ): Promise<PrediccionResponse> => {
   const formData = new FormData();
   formData.append("file", file);
-  formData.append("consulta_id", consulta_id);
+  if (paciente_id) formData.append("paciente_id", paciente_id);
+  if (consulta_id) formData.append("consulta_id", consulta_id);
   formData.append("lado_ovario", lado_ovario);
 
   const response = await fetch(`${BASE_URL}/criterio3/predecir`, {
@@ -58,20 +61,25 @@ export const predecirImagen = async (
   return response.json();
 };
 
-// ── Validar: el médico confirma o corrige el diagnóstico ─────────────────
+// ── Validar: el médico evalúa y confirma el diagnóstico ─────────────────
 export const validarImagen = async (
   id: string,
-  etiqueta: "SOP" | "Normal"
+  etiqueta: "SOP" | "Normal",
+  datosEvaluacion?: Record<string, any>
 ): Promise<ValidacionResponse> => {
+  const payload = {
+    etiqueta_real: etiqueta,
+    ...datosEvaluacion,
+  };
   const response = await fetch(`${BASE_URL}/criterio3/validar/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ etiqueta_real: etiqueta }),
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(`Error al validar: ${detail}`);
+    throw new Error(`Error al registrar la evaluación: ${detail}`);
   }
   return response.json();
 };

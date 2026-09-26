@@ -32,7 +32,7 @@ const routes: RoutesType[] = [
     component: <MainDashboard />,
   },
   {
-    category: "PACIENTES Y ATENCIÓN CLÍNICA",
+    category: "GESTIÓN DE PACIENTES",
     name: "Pacientes",
     layout: "/admin",
     path: "pacientes",
@@ -40,7 +40,15 @@ const routes: RoutesType[] = [
     component: <Pacientes />,
   },
   {
-    category: "PACIENTES Y ATENCIÓN CLÍNICA",
+    category: "GESTIÓN DE PACIENTES",
+    name: "Antecedentes Médicos",
+    layout: "/admin",
+    path: "antecedentes",
+    icon: <MdAssignment className="h-5 w-5" />,
+    component: <AntecedentesView />,
+  },
+  {
+    category: "GESTIÓN DE PACIENTES",
     name: "Consultas Médicas",
     layout: "/admin",
     path: "consultas",
@@ -48,7 +56,7 @@ const routes: RoutesType[] = [
     component: <ConsultasView />,
   },
   {
-    category: "PACIENTES Y ATENCIÓN CLÍNICA",
+    category: "GESTIÓN DE PACIENTES",
     name: "Agenda de Citas",
     layout: "/admin",
     path: "citas",
@@ -56,16 +64,8 @@ const routes: RoutesType[] = [
     component: <CitasView />,
   },
   {
-    category: "DIAGNÓSTICO E IA (ROTTERDAM)",
-    name: "Antecedentes Médicos (XGBoost)",
-    layout: "/admin",
-    path: "antecedentes",
-    icon: <MdAssignment className="h-5 w-5" />,
-    component: <AntecedentesView />,
-  },
-  {
-    category: "DIAGNÓSTICO E IA (ROTTERDAM)",
-    name: "Análisis Ecográfico (EfficientNet)",
+    category: "EVALUACIÓN Y DIAGNÓSTICO",
+    name: "Análisis Ecográfico",
     layout: "/admin",
     path: "analysis",
     icon: <MdImageSearch className="h-5 w-5" />,
