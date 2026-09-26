@@ -65,7 +65,7 @@ const Sidebar = (props: {
             <span className="text-xs font-bold text-pink-300 uppercase tracking-wider">Sistema Activo</span>
           </div>
           <p className="text-xs text-white/50 leading-relaxed">
-            Detección de SOP asistida por IA — EfficientNet-B0 v1.0
+            Detección y Seguimiento Clínico de SOP
           </p>
         </div>
       </div>
