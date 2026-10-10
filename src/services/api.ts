@@ -2,16 +2,20 @@ const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
 // ── Respuesta del endpoint POST /criterio3/predecir ───────────────────────
 export interface PrediccionResponse {
-  id: string;                      // UUID
-  consulta_id: string;             // UUID
+  id: string;
+  consulta_id: string;
   imagen_url: string;
   imagen_nombre: string;
-  prob_sop: number;                // 0.0 – 1.0  (fracción)
-  prob_normal: number;             // 0.0 – 1.0  (fracción)
-  prob_sop_porcentaje: number;     // 0.0 – 100.0 ← usar en barras
-  prob_normal_porcentaje: number;  // 0.0 – 100.0 ← usar en barras
-  resultado: string;               // "Cumple criterio" | "No cumple criterio"
-  num_foliculos: number;
+  prob_sop: number;
+  prob_normal: number;
+  prob_sop_porcentaje: number;
+  prob_normal_porcentaje: number;
+  resultado: string;                   // "Cumple criterio" | "No cumple criterio"
+  num_foliculos: number;               // total (antrales + dominante)
+  foliculos_antrales_pequenos?: number; // 2-9 mm (definitorios SOP)
+  foliculos_dominante?: number;         // 18-24 mm (ausente en SOP)
+  patron_folicular?: string;            // "collar_de_perlas" | "fisiologico"
+  descripcion_folicular?: string;       // descripción clínica del patrón
   mapa_calor_url: string | null;
   version_modelo: string;
   created_at: string;

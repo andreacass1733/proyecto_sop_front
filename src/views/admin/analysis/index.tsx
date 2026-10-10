@@ -363,39 +363,77 @@ const Analysis = () => {
                     </div>
                   </div>
 
-                  {/* ── CONTEO TOTAL DE FOLÍCULOS ECOGRÁFICOS ── */}
-                  <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-5 border-t border-slate-200/60 dark:border-navy-700/60">
-                    <div className="bg-pink-50/80 dark:bg-pink-950/30 rounded-2xl p-4.5 border border-pink-200 dark:border-pink-800/50">
-                      <p className="text-xs font-bold uppercase tracking-wider text-pink-700 dark:text-pink-300">Folículos Totales Estimados</p>
-                      <p className="text-3xl font-extrabold text-pink-600 dark:text-pink-400 mt-1">
-                        {result.num_foliculos} <span className="text-xs font-normal text-slate-500">folículos antrales</span>
-                      </p>
-                      {cumple ? (
-                        result.num_foliculos >= 12 ? (
-                          <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 mt-1.5 flex items-center gap-1">
-                            ⚠ Patrón SOP (Elevado: ≥ 12 folículos)
-                          </p>
-                        ) : (
-                          <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 mt-1.5 flex items-center gap-1">
-                            ⚠ Morfología SOP por IA (Revisión de folículos recomendada)
-                          </p>
-                        )
-                      ) : (
-                        <p className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 mt-1.5 flex items-center gap-1">
-                          ✓ Normal (Fisiológico: &lt; 12 folículos)
-                        </p>
-                      )}
-                    </div>
+                  {/* ── DESGLOSE FOLICULAR POR TIPO CLÍNICO ── */}
+                  <div className="mt-6 space-y-3 pt-5 border-t border-slate-200/60 dark:border-navy-700/60">
 
-                    <div className="bg-white dark:bg-navy-900/60 rounded-2xl p-4.5 border border-slate-200/60 dark:border-navy-700/50 flex flex-col justify-between">
-                      <div>
-                        <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Umbral Criterio Rotterdam</p>
-                        <p className="text-base font-bold text-slate-800 dark:text-white mt-1">
-                          ≥ 12 folículos <span className="text-xs font-normal text-slate-400">(2-9 mm)</span>
+                    {/* Título del desglose */}
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      Desglose Folicular por Tipo Clínico
+                    </p>
+
+                    {/* Fila de tarjetas de tipo folicular */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+
+                      {/* Antrales Pequeños 2-9 mm */}
+                      <div className={`rounded-2xl p-4 border ${cumple ? "bg-rose-50/80 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/50" : "bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50"}`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-400 flex-shrink-0" />
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                            Antrales Pequeños
+                          </p>
+                        </div>
+                        <p className="text-2xl font-extrabold text-slate-800 dark:text-white">
+                          {result.foliculos_antrales_pequenos ?? result.num_foliculos}
+                        </p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                          2–9 mm · {cumple ? "≥12 = criterio Rotterdam" : "2-6 = rango normal"}
                         </p>
                       </div>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight mt-2">
-                        Un ovario sano contiene folículos normales (&lt;12). El SOP se diagnostica por exceso folicular.
+
+                      {/* Folículo Dominante 18-24 mm */}
+                      <div className={`rounded-2xl p-4 border ${cumple ? "bg-slate-100/80 dark:bg-navy-900/60 border-slate-200 dark:border-navy-700" : "bg-blue-50/80 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/50"}`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${cumple ? "bg-slate-300" : "bg-blue-400"}`} />
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                            Dominante / Graaf
+                          </p>
+                        </div>
+                        <p className={`text-2xl font-extrabold ${cumple ? "text-slate-400 dark:text-slate-600" : "text-blue-700 dark:text-blue-300"}`}>
+                          {result.foliculos_dominante ?? (cumple ? 0 : 1)}
+                        </p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                          18–24 mm · {cumple ? "Ausente → anovulación" : "Presente → ovulación normal"}
+                        </p>
+                      </div>
+
+                      {/* Patrón ecográfico */}
+                      <div className={`rounded-2xl p-4 border ${cumple ? "bg-pink-50/80 dark:bg-pink-950/30 border-pink-200 dark:border-pink-800/50" : "bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50"}`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${cumple ? "bg-pink-400" : "bg-emerald-400"}`} />
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                            Patrón Ecográfico
+                          </p>
+                        </div>
+                        <p className={`text-xs font-bold mt-1 ${cumple ? "text-pink-600 dark:text-pink-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                          {cumple ? "Collar de Perlas" : "Fisiológico Normal"}
+                        </p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+                          {result.descripcion_folicular
+                            ? result.descripcion_folicular.substring(0, 80) + (result.descripcion_folicular.length > 80 ? "…" : "")
+                            : (cumple
+                              ? "Folículos antrales detenidos en periferia ovárica."
+                              : "Distribución folicular dentro de límites normales.")}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Nota clínica: Rotterdam */}
+                    <div className="flex items-start gap-2 bg-slate-50 dark:bg-navy-900/40 rounded-xl p-3 border border-slate-200/60 dark:border-navy-700/40">
+                      <span className="text-slate-400 text-xs mt-0.5">ℹ</span>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                        <strong>Criterio Rotterdam:</strong> ≥ 12 folículos antrales (2-9 mm) en al menos un ovario
+                        o volumen ovárico {">"} 10 ml. Los folículos primordiales/primarios (&lt; 0.1 mm) no son
+                        visibles ecográficamente y no se contabilizan.
                       </p>
                     </div>
                   </div>
@@ -424,11 +462,11 @@ const Analysis = () => {
           </div>
         </div>
 
-        {/* ── SECCIÓN INFERIOR DE ANCHO COMPLETO (100% WIDTH - SIN ESPACIO BLANCO EN EL LADO IZQUIERDO) ── */}
+        {/* ── SECCIÓN INFERIOR DE ANCHO COMPLETO ── */}
         {result && (
           <div className="w-full space-y-6 pt-2">
-            
-            {/* ── Mapa de Calor Grad-CAM con Guía Clínica Lado a Lado (ANCHO COMPLETO) ── */}
+
+            {/* ── Mapa Grad-CAM con Guía Clínica ── */}
             {result.mapa_calor_url && (
               <div className="bg-white dark:bg-navy-800 rounded-3xl border border-slate-200/80 dark:border-navy-700 p-7 shadow-sm space-y-4 w-full">
                 <div className="flex items-center justify-between border-b border-slate-100 dark:border-navy-700/60 pb-3.5">
@@ -441,81 +479,82 @@ const Analysis = () => {
                   </span>
                 </div>
 
-                {/* ESTRUCTURA INTERNA LADO A LADO: IZQUIERDA IMAGEN | DERECHA ETIQUETAS Y GUÍA */}
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch pt-1">
                   
-                  {/* ── IZQUIERDA: Imagen del Mapa de Calor (5 COLS) ── */}
+                  {/* ── Única Imagen Principal: Mapa de Calor Grad-CAM con Contornos Foliculares ── */}
                   <div className="md:col-span-5 flex flex-col justify-center bg-slate-950 rounded-2xl border border-slate-200 dark:border-navy-700 p-4 overflow-hidden shadow-inner min-h-[300px]">
                     <img
                       src={result.mapa_calor_url}
-                      alt="Mapa de calor de atención en ecografía"
+                      alt="Mapa de calor Grad-CAM con contornos foliculares"
                       className="max-h-80 w-full object-contain rounded-xl"
                     />
                     <p className="text-[11px] text-slate-400 text-center mt-2 font-mono">
-                      Superposición Saliency Map Grad-CAM
+                      Mapa de Calor Grad-CAM · Explicabilidad Visual
                     </p>
                   </div>
 
-                  {/* ── DERECHA: Etiquetas y Guía de Interpretación (7 COLS) ── */}
+                  {/* Guía de Interpretación Clínica */}
                   <div className="md:col-span-7 bg-slate-50 dark:bg-navy-900/60 rounded-2xl p-5 sm:p-6 border border-slate-200/60 dark:border-navy-700/60 flex flex-col justify-between space-y-4">
-                    
-                    {/* Encabezado de la Guía */}
                     <div className="flex items-start gap-3">
                       <div className="w-8 h-8 rounded-xl bg-pink-100 dark:bg-pink-900/40 text-pink-600 dark:text-pink-300 flex items-center justify-center flex-shrink-0 font-bold text-sm">
                         💡
                       </div>
                       <div>
                         <h4 className="text-sm font-bold text-slate-800 dark:text-white">
-                          Guía de Interpretación para el Especialista
+                          Guía de Interpretación Visual
                         </h4>
                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                          Muestra las áreas focales donde la red neuronal basó su diagnóstico de la ecografía.
+                          {cumple
+                            ? "Los trazos dorados demarcan la cápsula folicular (borde anatómico) de los folículos antrales detectados. El interior oscuro (anecoico) es el líquido folicular."
+                            : "Mapa de atención continuo sin marcadores patológicos."}
                         </p>
                       </div>
                     </div>
 
-                    {/* Tarjetas de Etiquetas de Colores Apiladas */}
                     <div className="space-y-3">
                       {/* Zona Roja */}
                       <div className="bg-white dark:bg-navy-800 p-3.5 rounded-xl border border-slate-200/80 dark:border-navy-700 flex items-start gap-3 shadow-2xs">
                         <span className="w-3.5 h-3.5 rounded-full bg-rose-500 shadow-sm flex-shrink-0 mt-0.5" />
                         <div>
-                          <p className="text-xs font-bold text-rose-600 dark:text-rose-400">Zonas Rojas (Alta Atención)</p>
+                          <p className="text-xs font-bold text-rose-600 dark:text-rose-400">Zonas Rojas — Alta Atención</p>
                           <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug mt-0.5">
-                            Máximo interés diagnóstico: distribución folicular periférica (patrón en collar de perlas) y estroma denso.
+                            Foco diagnóstico de la red neuronal: estroma denso y distribución periférica.
                           </p>
                         </div>
                       </div>
 
-                      {/* Zona Amarilla */}
-                      <div className="bg-white dark:bg-navy-800 p-3.5 rounded-xl border border-slate-200/80 dark:border-navy-700 flex items-start gap-3 shadow-2xs">
-                        <span className="w-3.5 h-3.5 rounded-full bg-amber-400 shadow-sm flex-shrink-0 mt-0.5" />
-                        <div>
-                          <p className="text-xs font-bold text-amber-600 dark:text-amber-400">Zonas Amarillas (Media)</p>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug mt-0.5">
-                            Estructuras ecogénicas intermedias o bordes de folículos secundarios analizados.
-                          </p>
+                      {/* Contornos Foliculares */}
+                      {cumple && (
+                        <div className="bg-white dark:bg-navy-800 p-3.5 rounded-xl border border-amber-200 dark:border-amber-800/50 flex items-start gap-3 shadow-2xs">
+                          <span className="w-3.5 h-3.5 rounded-full bg-amber-400 shadow-sm flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-xs font-bold text-amber-600 dark:text-amber-400">Contornos Dorados — Cápsula Folicular</p>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug mt-0.5">
+                              Delineado anatómico de la cápsula folicular (línea granulosa/teca).
+                            </p>
+                          </div>
                         </div>
-                      </div>
+                      )}
 
                       {/* Zona Azul */}
                       <div className="bg-white dark:bg-navy-800 p-3.5 rounded-xl border border-slate-200/80 dark:border-navy-700 flex items-start gap-3 shadow-2xs">
                         <span className="w-3.5 h-3.5 rounded-full bg-blue-500 shadow-sm flex-shrink-0 mt-0.5" />
                         <div>
-                          <p className="text-xs font-bold text-blue-600 dark:text-blue-400">Zonas Azules (Baja / Nula)</p>
+                          <p className="text-xs font-bold text-blue-600 dark:text-blue-400">Zonas Azules — Fondo</p>
                           <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug mt-0.5">
-                            Fondo ecográfico o parénquima de baja significancia diagnóstica.
+                            Parénquima o fondo sin significancia clínica.
                           </p>
                         </div>
                       </div>
                     </div>
-
                   </div>
                 </div>
+
+
               </div>
             )}
 
-            {/* ── Validación Médica Real (ANCHO COMPLETO) ── */}
+            {/* ── Validación Médica ── */}
             <div className="bg-white dark:bg-navy-800 rounded-3xl border border-slate-200/80 dark:border-navy-700 p-7 shadow-sm w-full">
               <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">
                 Confirmación del Diagnóstico Médico
@@ -564,7 +603,7 @@ const Analysis = () => {
               )}
             </div>
 
-            {/* Disclaimer Profesional (ANCHO COMPLETO) */}
+            {/* Disclaimer Profesional */}
             <div className="flex items-start gap-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/50 rounded-2xl p-4 text-xs sm:text-sm text-amber-700 dark:text-amber-400 leading-relaxed w-full">
               <MdWarning className="text-amber-500 flex-shrink-0 mt-0.5" size={18} />
               <span>
