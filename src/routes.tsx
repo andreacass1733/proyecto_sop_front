@@ -5,7 +5,6 @@ import MainDashboard from "views/admin/default";
 import Analysis from "views/admin/analysis";
 import Pacientes from "views/admin/pacientes";
 import DetallePaciente from "views/admin/pacientes/DetallePaciente";
-import AntecedentesView from "views/admin/antecedentes";
 import CitasView from "views/admin/citas";
 import ConsultasView from "views/admin/consultas";
 import SignIn from "views/auth/SignIn";
@@ -38,14 +37,6 @@ const routes: RoutesType[] = [
     path: "pacientes",
     icon: <MdPeople className="h-5 w-5" />,
     component: <Pacientes />,
-  },
-  {
-    category: "GESTIÓN DE PACIENTES",
-    name: "Antecedentes Médicos",
-    layout: "/admin",
-    path: "antecedentes",
-    icon: <MdAssignment className="h-5 w-5" />,
-    component: <AntecedentesView />,
   },
   {
     category: "GESTIÓN DE PACIENTES",

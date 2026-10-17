@@ -1,6 +1,257 @@
 const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
-// ── Respuesta del endpoint POST /criterio3/predecir ───────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+// GESTIÓN DE TOKEN JWT Y PETICIONES AUTENTICADAS
+// ════════════════════════════════════════════════════════════════════════════
+
+export const getStoredToken = (): string | null => {
+  return localStorage.getItem("sop_auth_token");
+};
+
+export const setStoredToken = (token: string): void => {
+  localStorage.setItem("sop_auth_token", token);
+};
+
+export const removeStoredToken = (): void => {
+  localStorage.removeItem("sop_auth_token");
+};
+
+/**
+ * Cliente HTTP autenticado con inyección automática del token JWT de Supabase Auth
+ * en los encabezados HTTP (Authorization: Bearer <token>).
+ * Comprueba que el token se envíe en cada petición al backend FastAPI.
+ */
+export const authFetch = async (
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<Response> => {
+  const url = endpoint.startsWith("http")
+    ? endpoint
+    : `${BASE_URL}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
+
+  const token = getStoredToken();
+  const headers = new Headers(options.headers || {});
+
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const response = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  // Si el token expiró o fue revocado en Supabase Auth
+  if (response.status === 401) {
+    removeStoredToken();
+    localStorage.removeItem("sop_active_doctor");
+    if (
+      typeof window !== "undefined" &&
+      !window.location.pathname.includes("/auth/sign-in")
+    ) {
+      window.location.href = "/auth/sign-in";
+    }
+  }
+
+  return response;
+};
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// AUTENTICACIÓN (HU-001 & HU-002)
+// ════════════════════════════════════════════════════════════════════════════
+
+export interface LoginPayload {
+  email: string;
+  password: string;
+  require_2fa?: boolean;
+}
+
+export interface InitialLoginResponse {
+  requires_2fa: boolean;
+  session_id?: string;
+  email_masked?: string;
+  telefono_masked?: string;
+  codigo_demo?: string;
+  mensaje: string;
+  access_token?: string;
+  token_type?: string;
+  expires_in?: number;
+  user_id?: string;
+  email?: string;
+  medico?: MedicoData;
+}
+
+export interface Verify2FAPayload {
+  session_id: string;
+  code: string;
+}
+
+export interface MedicoData {
+  id: string;
+  nombre: string;
+  primer_apellido: string;
+  segundo_apellido?: string;
+  especialidad?: string;
+  telefono?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface LoginResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  user_id: string;
+  email: string;
+  medico: MedicoData;
+}
+
+export interface LogoutResponse {
+  mensaje: string;
+}
+
+/**
+ * HU-001 Paso 1: Valida credenciales y emite código de Doble Factor (2FA).
+ */
+export const iniciarSesion = async (
+  credentials: LoginPayload
+): Promise<InitialLoginResponse> => {
+  const response = await fetch(`${BASE_URL}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(credentials),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const message = errorData.detail || "Correo o contraseña incorrectos";
+    throw new Error(message);
+  }
+
+  return response.json();
+};
+
+/**
+ * HU-001 Paso 2: Verifica el código de Doble Factor (2FA) y obtiene el token JWT.
+ */
+export const verificar2FaApi = async (
+  payload: Verify2FAPayload
+): Promise<LoginResponse> => {
+  const response = await fetch(`${BASE_URL}/auth/verify-2fa`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const message = errorData.detail || "Código de verificación incorrecto";
+    throw new Error(message);
+  }
+
+  const data: LoginResponse = await response.json();
+  if (data.access_token) {
+    setStoredToken(data.access_token);
+  }
+  return data;
+};
+
+/**
+ * Reenvía un nuevo código 2FA para la sesión actual.
+ */
+export const reenviar2FaApi = async (
+  session_id: string
+): Promise<{ session_id: string; codigo_demo?: string; mensaje: string }> => {
+  const response = await fetch(`${BASE_URL}/auth/resend-2fa`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Error al reenviar código");
+  }
+
+  return response.json();
+};
+
+/**
+ * Solicita código de recuperación de contraseña enviado al correo.
+ */
+export const solicitarRecuperacionApi = async (
+  email: string
+): Promise<{ session_id: string; email_masked: string; mensaje: string }> => {
+  const response = await fetch(`${BASE_URL}/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Error al solicitar recuperación");
+  }
+
+  return response.json();
+};
+
+/**
+ * Restablece y cambia la contraseña del especialista en Supabase Auth.
+ */
+export const restablecerContrasenaApi = async (payload: {
+  email: string;
+  new_password: string;
+  code: string;
+  session_id?: string;
+}): Promise<{ mensaje: string }> => {
+  const response = await fetch(`${BASE_URL}/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Error al restablecer la contraseña");
+  }
+
+  return response.json();
+};
+
+/**
+ * HU-002: Cierre de sesión e invalidación del token JWT en la base de datos.
+ */
+export const cerrarSesionApi = async (): Promise<void> => {
+  try {
+    await authFetch(`/auth/logout`, {
+      method: "POST",
+    });
+  } catch (err) {
+    console.warn("Aviso al cerrar sesión en el servidor:", err);
+  } finally {
+    removeStoredToken();
+    localStorage.removeItem("sop_active_doctor");
+  }
+};
+
+/**
+ * Obtiene el perfil del usuario autenticado actualmente.
+ */
+export const obtenerUsuarioActualApi = async (): Promise<any> => {
+  const response = await authFetch(`/auth/me`);
+  if (!response.ok) {
+    throw new Error("Sesión inválida o expirada");
+  }
+  return response.json();
+};
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// CRITERIO 3 — ECOGRAFÍA IA
+// ════════════════════════════════════════════════════════════════════════════
+
 export interface PrediccionResponse {
   id: string;
   consulta_id: string;
@@ -22,7 +273,6 @@ export interface PrediccionResponse {
   lado_ovario?: string;
 }
 
-// ── Respuesta del endpoint GET /criterio3/stats ───────────────────────────
 export interface StatsResponse {
   total_estudios: number;
   total_validados: number;
@@ -33,14 +283,12 @@ export interface StatsResponse {
   umbral_reentrenamiento: number;
 }
 
-// ── Respuesta del endpoint PUT /criterio3/validar/{id} ────────────────────
 export interface ValidacionResponse {
   id: string;
   etiqueta_real: string;
   validado: boolean;
 }
 
-// ── Predecir: envía file + consulta_id como FormData ─────────────────────
 export const predecirImagen = async (
   file: File,
   paciente_id?: string,
@@ -53,7 +301,7 @@ export const predecirImagen = async (
   if (consulta_id) formData.append("consulta_id", consulta_id);
   formData.append("lado_ovario", lado_ovario);
 
-  const response = await fetch(`${BASE_URL}/criterio3/predecir`, {
+  const response = await authFetch(`/criterio3/predecir`, {
     method: "POST",
     body: formData,
   });
@@ -65,7 +313,6 @@ export const predecirImagen = async (
   return response.json();
 };
 
-// ── Validar: el médico evalúa y confirma el diagnóstico ─────────────────
 export const validarImagen = async (
   id: string,
   etiqueta: "SOP" | "Normal",
@@ -75,7 +322,7 @@ export const validarImagen = async (
     etiqueta_real: etiqueta,
     ...datosEvaluacion,
   };
-  const response = await fetch(`${BASE_URL}/criterio3/validar/${id}`, {
+  const response = await authFetch(`/criterio3/validar/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -88,10 +335,38 @@ export const validarImagen = async (
   return response.json();
 };
 
-// ── Estadísticas del dashboard ────────────────────────────────────────────
 export const obtenerStats = async (): Promise<StatsResponse> => {
-  const response = await fetch(`${BASE_URL}/criterio3/stats`);
+  const response = await authFetch(`/criterio3/stats`);
   if (!response.ok) throw new Error("Error al obtener estadísticas");
+  return response.json();
+};
+
+export interface EstudioEcograficoItem {
+  id: string;
+  paciente_id?: string;
+  consulta_id?: string;
+  imagen_url: string;
+  imagen_nombre?: string;
+  mapa_calor_url?: string;
+  prob_sop: number;
+  prob_normal: number;
+  resultado: string;
+  num_foliculos: number;
+  lado_ovario?: string;
+  etiqueta_real?: string;
+  validado: boolean;
+  observacion_medico?: string;
+  created_at: string;
+}
+
+export const listarEstudiosEcograficos = async (
+  pacienteId?: string
+): Promise<EstudioEcograficoItem[]> => {
+  const url = pacienteId
+    ? `/criterio3/estudios?paciente_id=${pacienteId}`
+    : `/criterio3/estudios`;
+  const response = await authFetch(url);
+  if (!response.ok) throw new Error("Error al listar estudios ecográficos");
   return response.json();
 };
 
@@ -154,12 +429,11 @@ export interface AntecedentesOut {
   updated_at: string;
 }
 
-// ── Listar pacientes (con búsqueda, filtro de estado y paginación) ────────
 export const listarPacientes = async (
   busqueda?: string,
   activo?: boolean | null,
   pagina = 1,
-  porPagina = 10,
+  porPagina = 10
 ): Promise<PacienteListItem[]> => {
   const params = new URLSearchParams({
     pagina: String(pagina),
@@ -169,21 +443,19 @@ export const listarPacientes = async (
   if (activo !== undefined && activo !== null) {
     params.set("activo", String(activo));
   }
-  const res = await fetch(`${BASE_URL}/pacientes?${params}`);
+  const res = await authFetch(`/pacientes?${params}`);
   if (!res.ok) throw new Error("Error al listar pacientes");
   return res.json();
 };
 
-// ── Obtener detalle de un paciente ────────────────────────────────────────
 export const obtenerPaciente = async (id: string): Promise<PacienteOut> => {
-  const res = await fetch(`${BASE_URL}/pacientes/${id}`);
+  const res = await authFetch(`/pacientes/${id}`);
   if (!res.ok) throw new Error("Paciente no encontrado");
   return res.json();
 };
 
-// ── Crear paciente ────────────────────────────────────────────────────────
 export const crearPaciente = async (datos: PacienteCreate): Promise<PacienteOut> => {
-  const res = await fetch(`${BASE_URL}/pacientes`, {
+  const res = await authFetch(`/pacientes`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(datos),
@@ -195,12 +467,11 @@ export const crearPaciente = async (datos: PacienteCreate): Promise<PacienteOut>
   return res.json();
 };
 
-// ── Actualizar paciente ───────────────────────────────────────────────────
 export const actualizarPaciente = async (
   id: string,
   datos: Partial<PacienteCreate> & { activo?: boolean }
 ): Promise<PacienteOut> => {
-  const res = await fetch(`${BASE_URL}/pacientes/${id}`, {
+  const res = await authFetch(`/pacientes/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(datos),
@@ -209,20 +480,18 @@ export const actualizarPaciente = async (
   return res.json();
 };
 
-// ── Obtener antecedentes de un paciente ───────────────────────────────────
 export const obtenerAntecedentes = async (pacienteId: string): Promise<AntecedentesOut> => {
-  const res = await fetch(`${BASE_URL}/antecedentes/${pacienteId}`);
+  const res = await authFetch(`/antecedentes/${pacienteId}`);
   if (res.status === 404) throw new Error("SIN_ANTECEDENTES");
   if (!res.ok) throw new Error("Error al obtener antecedentes");
   return res.json();
 };
 
-// ── Guardar antecedentes (crea o actualiza) ───────────────────────────────
 export const guardarAntecedentes = async (
   pacienteId: string,
   datos: Omit<AntecedentesOut, "id" | "paciente_id" | "created_at" | "updated_at">
 ): Promise<AntecedentesOut> => {
-  const res = await fetch(`${BASE_URL}/antecedentes/guardar`, {
+  const res = await authFetch(`/antecedentes/guardar`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...datos, paciente_id: pacienteId }),
@@ -284,16 +553,15 @@ export interface ConsultaCreate {
   fecha_proxima_cita?: string;
 }
 
-// ── CITAS ──
 export const listarCitas = async (pacienteId?: string): Promise<CitaOut[]> => {
-  const url = pacienteId ? `${BASE_URL}/citas?paciente_id=${pacienteId}` : `${BASE_URL}/citas`;
-  const res = await fetch(url);
+  const url = pacienteId ? `/citas?paciente_id=${pacienteId}` : `/citas`;
+  const res = await authFetch(url);
   if (!res.ok) throw new Error("Error al obtener citas");
   return res.json();
 };
 
 export const crearCita = async (datos: CitaCreate): Promise<CitaOut> => {
-  const res = await fetch(`${BASE_URL}/citas`, {
+  const res = await authFetch(`/citas`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(datos),
@@ -303,7 +571,7 @@ export const crearCita = async (datos: CitaCreate): Promise<CitaOut> => {
 };
 
 export const actualizarCita = async (id: string, datos: Partial<CitaCreate>): Promise<CitaOut> => {
-  const res = await fetch(`${BASE_URL}/citas/${id}`, {
+  const res = await authFetch(`/citas/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(datos),
@@ -312,16 +580,15 @@ export const actualizarCita = async (id: string, datos: Partial<CitaCreate>): Pr
   return res.json();
 };
 
-// ── CONSULTAS ──
 export const listarConsultas = async (pacienteId?: string): Promise<ConsultaOut[]> => {
-  const url = pacienteId ? `${BASE_URL}/consultas?paciente_id=${pacienteId}` : `${BASE_URL}/consultas`;
-  const res = await fetch(url);
+  const url = pacienteId ? `/consultas?paciente_id=${pacienteId}` : `/consultas`;
+  const res = await authFetch(url);
   if (!res.ok) throw new Error("Error al obtener consultas");
   return res.json();
 };
 
 export const crearConsulta = async (datos: ConsultaCreate): Promise<ConsultaOut> => {
-  const res = await fetch(`${BASE_URL}/consultas`, {
+  const res = await authFetch(`/consultas`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(datos),
@@ -331,7 +598,7 @@ export const crearConsulta = async (datos: ConsultaCreate): Promise<ConsultaOut>
 };
 
 export const actualizarConsulta = async (id: string, datos: Partial<ConsultaCreate>): Promise<ConsultaOut> => {
-  const res = await fetch(`${BASE_URL}/consultas/${id}`, {
+  const res = await authFetch(`/consultas/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(datos),
