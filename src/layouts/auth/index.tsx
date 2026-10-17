@@ -61,8 +61,8 @@ export default function Auth() {
           {/* Ilustración central médica del SOP */}
           <div className="relative z-10 my-auto py-4 flex flex-col items-center">
             <div className="relative w-full max-w-[420px] rounded-3xl overflow-hidden shadow-2xl border border-white/20 bg-white/90 p-3 group transition-transform duration-500 hover:scale-[1.02]">
-              <img
-                src={sopHeroImg}
+             <img
+                src="https://www.infobae.com/resizer/v2/HDSZPQPLV5HR3B7YFCPHBQGXUI.png?auth=c089c4c535f6c4e7b70466c8016e802a4fea4cd29257b7fdafb2395f5c39921f&smart=true&width=992&height=541&quality=85"
                 alt="Fisiopatología y Morfología del Síndrome de Ovario Poliquístico"
                 className="w-full h-auto object-contain rounded-2xl"
               />
