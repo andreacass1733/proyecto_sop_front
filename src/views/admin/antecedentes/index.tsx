@@ -4,12 +4,14 @@ import {
   MdMedicalServices, MdSearch, MdPerson,
   MdSave, MdCheckCircle, MdWarning,
   MdInfo, MdFemale, MdOutlineBiotech, MdFamilyRestroom, MdShield,
-  MdOutlineAssignment, MdCheck, MdClose, MdRefresh
+  MdOutlineAssignment, MdCheck, MdClose, MdRefresh,
+  MdLock, MdLockOpen, MdMedication
 } from "react-icons/md";
 import {
   listarPacientes, obtenerPaciente, obtenerAntecedentes, guardarAntecedentes,
   PacienteListItem, PacienteOut
 } from "services/api";
+import { OPCIONES_ANTICONCEPTIVOS } from "views/admin/pacientes/DetallePaciente";
 
 function calcularEdad(fechaNacimiento?: string | null): string {
   if (!fechaNacimiento) return "—";
@@ -35,6 +37,13 @@ export default function AntecedentesView() {
   const [loadingPaciente, setLoadingPaciente]           = useState(false);
   const [saving, setSaving]                             = useState(false);
   const [toast, setToast]                               = useState<{ msg: string; tipo: "ok" | "error" } | null>(null);
+
+  // Estados de protección de datos biológicos (Sexarca irreversible y Menarquía fija)
+  const [sexarcaPrevia, setSexarcaPrevia] = useState(false);
+  const [menarquiaPrevia, setMenarquiaPrevia] = useState<number | null>(null);
+  const [menarquiaDesbloqueada, setMenarquiaDesbloqueada] = useState(false);
+  const [modalSexarcaAbierto, setModalSexarcaAbierto] = useState(false);
+  const [modalMenarquiaAbierto, setModalMenarquiaAbierto] = useState(false);
 
   // Formulario Antecedentes
   const [form, setForm] = useState<{
@@ -108,8 +117,18 @@ export default function AntecedentesView() {
 
       try {
         const datosA = await obtenerAntecedentes(id);
+        const sexActiva = Boolean(
+          (datosA as any).iniciada_vida_sexual ?? (datosA.gestas > 0 || datosA.partos > 0)
+        );
+        setSexarcaPrevia(sexActiva);
+        if (datosA.edad_menarquia !== null && datosA.edad_menarquia !== undefined) {
+          setMenarquiaPrevia(Number(datosA.edad_menarquia));
+        } else {
+          setMenarquiaPrevia(null);
+        }
+
         setForm({
-          iniciada_vida_sexual: (datosA as any).iniciada_vida_sexual ?? (datosA.gestas > 0 || datosA.usa_anticonceptivos),
+          iniciada_vida_sexual: sexActiva,
           edad_menarquia: datosA.edad_menarquia ?? "",
           tipo_ciclo: datosA.tipo_ciclo ?? "regular",
           duracion_ciclo_habitual: datosA.duracion_ciclo_habitual ?? 28,
@@ -130,6 +149,8 @@ export default function AntecedentesView() {
         });
       } catch (err: any) {
         if (err.message === "SIN_ANTECEDENTES") {
+          setSexarcaPrevia(false);
+          setMenarquiaPrevia(null);
           setForm({
             iniciada_vida_sexual: false,
             edad_menarquia: "",
@@ -164,14 +185,31 @@ export default function AntecedentesView() {
   };
 
   const handleSexarca = (activa: boolean) => {
+    if (sexarcaPrevia && !activa) {
+      setModalSexarcaAbierto(true);
+      return;
+    }
     setForm(prev => ({
       ...prev,
       iniciada_vida_sexual: activa,
       ...(activa ? {} : {
-        gestas: 0, partos: 0, cesareas: 0, abortos: 0, hijos_vivos: 0,
-        usa_anticonceptivos: false, tipo_anticonceptivo: ""
+        gestas: 0, partos: 0, cesareas: 0, abortos: 0, hijos_vivos: 0
       })
     }));
+  };
+
+  const confirmarReversionSexarca = () => {
+    setForm(prev => ({
+      ...prev,
+      iniciada_vida_sexual: false,
+      gestas: 0,
+      partos: 0,
+      cesareas: 0,
+      abortos: 0,
+      hijos_vivos: 0,
+    }));
+    setModalSexarcaAbierto(false);
+    showToast("Modo corrección aplicado: Sexarca cambiada a 'No'", "ok");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -189,8 +227,8 @@ export default function AntecedentesView() {
         cesareas: form.iniciada_vida_sexual ? Number(form.cesareas) : 0,
         abortos: form.iniciada_vida_sexual ? Number(form.abortos) : 0,
         hijos_vivos: form.iniciada_vida_sexual ? Number(form.hijos_vivos) : 0,
-        usa_anticonceptivos: form.iniciada_vida_sexual ? form.usa_anticonceptivos : false,
-        tipo_anticonceptivo: form.iniciada_vida_sexual && form.usa_anticonceptivos ? form.tipo_anticonceptivo : null,
+        usa_anticonceptivos: form.usa_anticonceptivos,
+        tipo_anticonceptivo: form.usa_anticonceptivos ? (form.tipo_anticonceptivo || null) : null,
         familiar_con_sop: form.familiar_con_sop,
         familiar_con_diabetes: form.familiar_con_diabetes,
         diabetes: form.diabetes,
@@ -359,20 +397,38 @@ export default function AntecedentesView() {
 
             {/* SECCIÓN 1: SEXARCA Y VIDA SEXUAL */}
             <div className="bg-white dark:bg-navy-800 rounded-2xl p-6 sm:p-7 border border-gray-100 dark:border-navy-700 shadow-sm space-y-5">
-              <div className="flex items-center gap-2 border-b border-gray-100 dark:border-navy-700 pb-3">
-                <div className="w-8 h-8 rounded-lg bg-pink-100 dark:bg-pink-900/40 flex items-center justify-center text-pink-600 dark:text-pink-300 font-bold">
-                  <MdFemale size={20} />
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-navy-700 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-pink-100 dark:bg-pink-900/40 flex items-center justify-center text-pink-600 dark:text-pink-300 font-bold">
+                    <MdFemale size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-navy-700 dark:text-white text-sm">Sexarca / Inicio de Vida Sexual</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Condición clínica que habilita el registro de antecedentes obstétricos</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-navy-700 dark:text-white text-sm">Sexarca / Inicio de Vida Sexual</h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Determina la aplicación de contadores obstétricos y anticoncepción</p>
-                </div>
+                {sexarcaPrevia && (
+                  <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-extrabold text-rose-700 bg-rose-50 dark:bg-rose-900/30 dark:text-rose-300 px-3 py-1 rounded-full border border-rose-200 dark:border-rose-800/40">
+                    <MdShield size={14} /> Dato biológico irreversible
+                  </span>
+                )}
               </div>
 
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-gray-50 dark:bg-navy-700 p-4 rounded-xl border border-gray-200 dark:border-navy-600">
-                <span className="text-xs font-bold text-navy-700 dark:text-white">
-                  ¿La paciente ha iniciado vida sexual? (Sexarca Activa) *
-                </span>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-gray-50 dark:bg-navy-700 p-4 rounded-xl border border-gray-200 dark:border-navy-600">
+                <div>
+                  <span className="text-xs font-bold text-navy-700 dark:text-white block">
+                    ¿La paciente ha iniciado vida sexual? (Sexarca Activa) *
+                  </span>
+                  {sexarcaPrevia ? (
+                    <span className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 mt-1 block">
+                      Registrada previamente como activa. Requiere confirmación médica para revertir por corrección.
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 block">
+                      Al marcar "Sí", se habilitará la fórmula obstétrica (gestas, partos, cesáreas y abortos).
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
@@ -403,7 +459,7 @@ export default function AntecedentesView() {
                 <div className="flex items-center gap-3 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-xl text-xs font-medium text-amber-900 dark:text-amber-300">
                   <MdInfo size={22} className="text-amber-600 dark:text-amber-400 flex-shrink-0" />
                   <span>
-                    <strong>Paciente sin inicio de vida sexual:</strong> Los datos obstétricos (gestas, partos, abortos) y métodos anticonceptivos se ocultan automáticamente.
+                    <strong>Paciente sin inicio de vida sexual:</strong> Los antecedentes obstétricos (embarazos, partos, cesáreas y abortos) se omiten. El uso de anticonceptivos o terapia hormonal para regular el ciclo menstrual o acné en SOP se registra de manera independiente más abajo.
                   </span>
                 </div>
               )}
@@ -411,54 +467,112 @@ export default function AntecedentesView() {
 
             {/* SECCIÓN 2: HISTORIAL GINECOLÓGICO */}
             <div className="bg-white dark:bg-navy-800 rounded-2xl p-6 sm:p-7 border border-gray-100 dark:border-navy-700 shadow-sm space-y-5">
-              <div className="flex items-center gap-2 border-b border-gray-100 dark:border-navy-700 pb-3">
-                <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center text-purple-600 dark:text-purple-300 font-bold">
-                  <MdOutlineBiotech size={20} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-navy-700 dark:text-white text-sm">Historial Menstrual / Ginecológico</h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Parámetros fundamentales para los Criterios Rotterdam SOP</p>
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-navy-700 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center text-purple-600 dark:text-purple-300 font-bold">
+                    <MdOutlineBiotech size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-navy-700 dark:text-white text-sm">Historial Menstrual / Ginecológico</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Parámetros fundamentales para los Criterios Rotterdam SOP (Criterio 1: Disfunción Ovulatoria)</p>
+                  </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* Edad Menarquía Protegida */}
                 <div>
-                  <label className="block text-xs font-bold text-navy-700 dark:text-white mb-1">Edad Menarquia (Años)</label>
-                  <input type="number" min={8} max={20} value={form.edad_menarquia}
-                    onChange={e => setForm(p => ({ ...p, edad_menarquia: e.target.value === "" ? "" : Number(e.target.value) }))}
-                    placeholder="Ej: 12" className="w-full border border-gray-200 dark:border-navy-600 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-navy-700 dark:text-white bg-white dark:bg-navy-700 focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-navy-700 dark:text-white">
+                      Edad Menarquia (Años)
+                    </label>
+                    {menarquiaPrevia !== null && (
+                      <span className="text-[10px] font-extrabold text-purple-700 bg-purple-50 dark:bg-purple-900/40 dark:text-purple-300 px-2 py-0.5 rounded-full border border-purple-200 dark:border-purple-800 flex items-center gap-1">
+                        <MdLock size={12} /> Dato Histórico Fijo
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={8}
+                      max={20}
+                      disabled={menarquiaPrevia !== null && !menarquiaDesbloqueada}
+                      value={form.edad_menarquia}
+                      onChange={e => setForm(p => ({ ...p, edad_menarquia: e.target.value === "" ? "" : Number(e.target.value) }))}
+                      placeholder="Ej: 12"
+                      className={`w-full border rounded-xl px-3.5 py-2.5 text-sm font-semibold transition shadow-sm ${
+                        menarquiaPrevia !== null && !menarquiaDesbloqueada
+                          ? "bg-gray-100 dark:bg-navy-900 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-navy-600 cursor-not-allowed"
+                          : "bg-white dark:bg-navy-700 text-navy-700 dark:text-white border-gray-200 dark:border-navy-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      }`}
+                    />
+                    {menarquiaPrevia !== null && !menarquiaDesbloqueada && (
+                      <button
+                        type="button"
+                        onClick={() => setModalMenarquiaAbierto(true)}
+                        title="Desbloquear para corregir error de digitación"
+                        className="px-3 py-2.5 text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 border border-amber-300 dark:border-amber-700 rounded-xl flex items-center gap-1 whitespace-nowrap transition shadow-sm"
+                      >
+                        <MdLockOpen size={16} /> Corregir
+                      </button>
+                    )}
+                  </div>
+                  {menarquiaPrevia !== null && !menarquiaDesbloqueada && (
+                    <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                      La menarquía no cambia con el tiempo. Desbloquea solo si hubo error de registro.
+                    </p>
+                  )}
                 </div>
 
+                {/* Tipo de Ciclo Menstrual (Editable) */}
                 <div>
-                  <label className="block text-xs font-bold text-navy-700 dark:text-white mb-1">Patrón del Ciclo Menstrual *</label>
-                  <select value={form.tipo_ciclo} onChange={e => setForm(p => ({ ...p, tipo_ciclo: e.target.value }))}
-                    className="w-full border border-gray-200 dark:border-navy-600 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-navy-700 dark:text-white bg-white dark:bg-navy-700 focus:outline-none focus:ring-2 focus:ring-brand-500">
+                  <label className="block text-xs font-bold text-navy-700 dark:text-white mb-1">
+                    Patrón del Ciclo Menstrual *
+                  </label>
+                  <select
+                    value={form.tipo_ciclo}
+                    onChange={e => setForm(p => ({ ...p, tipo_ciclo: e.target.value }))}
+                    className="w-full border border-gray-200 dark:border-navy-600 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-navy-700 dark:text-white bg-white dark:bg-navy-700 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  >
                     <option value="regular">Regular (21-35 días)</option>
                     <option value="irregular">Irregular</option>
                     <option value="oligomenorrea">Oligomenorrea (&gt;35 días)</option>
-                    <option value="amenorrea">Amenorrea (Ausente)</option>
+                    <option value="amenorrea">Amenorrea (Ausente &gt;90 días)</option>
                   </select>
+                  <p className="mt-1 text-[11px] text-gray-400 dark:text-gray-500">
+                    Puede variar con tratamientos o evolución del SOP.
+                  </p>
                 </div>
 
+                {/* Duración Ciclo Habitual (Editable) */}
                 <div>
-                  <label className="block text-xs font-bold text-navy-700 dark:text-white mb-1">Duración Sangrado / Ciclo (Días)</label>
-                  <input type="number" min={1} max={90} value={form.duracion_ciclo_habitual}
+                  <label className="block text-xs font-bold text-navy-700 dark:text-white mb-1">
+                    Duración Sangrado / Ciclo (Días)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={90}
+                    value={form.duracion_ciclo_habitual}
                     onChange={e => setForm(p => ({ ...p, duracion_ciclo_habitual: e.target.value === "" ? "" : Number(e.target.value) }))}
-                    placeholder="Ej: 5 o 28" className="w-full border border-gray-200 dark:border-navy-600 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-navy-700 dark:text-white bg-white dark:bg-navy-700 focus:outline-none focus:ring-2 focus:ring-brand-500" />
-                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Días habituales de sangrado (ej. 5) o ciclo (ej. 28)</p>
+                    placeholder="Ej: 5 o 28"
+                    className="w-full border border-gray-200 dark:border-navy-600 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-navy-700 dark:text-white bg-white dark:bg-navy-700 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Días habituales de sangrado (ej. 5) o longitud del ciclo (ej. 28)</p>
                 </div>
               </div>
             </div>
 
-            {/* SECCIÓN 3: OBSTÉTRICO Y ANTICONCEPCIÓN (SOLO SI TIENE VIDA SEXUAL INICIADA) */}
+            {/* SECCIÓN 3: OBSTÉTRICO (SOLO SI TIENE VIDA SEXUAL INICIADA) */}
             {form.iniciada_vida_sexual && (
-              <div className="bg-white dark:bg-navy-800 rounded-2xl p-6 sm:p-7 border border-gray-100 dark:border-navy-700 shadow-sm space-y-5">
+              <div className="bg-white dark:bg-navy-800 rounded-2xl p-6 sm:p-7 border border-gray-100 dark:border-navy-700 shadow-sm space-y-5 animate-fade-in-up">
                 <div className="flex items-center gap-2 border-b border-gray-100 dark:border-navy-700 pb-3">
                   <div className="w-8 h-8 rounded-lg bg-rose-100 dark:bg-rose-900/40 flex items-center justify-center text-rose-600 dark:text-rose-300 font-bold">
                     <MdFamilyRestroom size={20} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-navy-700 dark:text-white text-sm">Historial Obstétrico y Anticoncepción</h3>
+                    <h3 className="font-bold text-navy-700 dark:text-white text-sm">Historial Obstétrico (Fórmula GPCA)</h3>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Información clínica para pacientes con sexarca activa</p>
                   </div>
                 </div>
@@ -495,24 +609,114 @@ export default function AntecedentesView() {
                       className="w-full border border-gray-200 dark:border-navy-600 rounded-xl px-3 py-2 text-sm font-bold text-navy-700 dark:text-white bg-white dark:bg-navy-700" />
                   </div>
                 </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                  <div className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-navy-700 rounded-xl border border-gray-200 dark:border-navy-600">
-                    <span className="text-xs font-bold text-navy-700 dark:text-white">¿Usa Anticonceptivos actualmente?</span>
-                    <input type="checkbox" checked={form.usa_anticonceptivos}
-                      onChange={e => setForm(p => ({ ...p, usa_anticonceptivos: e.target.checked }))} className="w-5 h-5 text-brand-500 rounded" />
-                  </div>
-                  {form.usa_anticonceptivos && (
-                    <div>
-                      <label className="block text-xs font-bold text-navy-700 dark:text-white mb-1">Tipo de Anticonceptivo</label>
-                      <input type="text" value={form.tipo_anticonceptivo}
-                        onChange={e => setForm(p => ({ ...p, tipo_anticonceptivo: e.target.value }))}
-                        placeholder="Ej: ACO Combinados, DIU Levonorgestrel, Implante" className="w-full border border-gray-200 dark:border-navy-600 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-navy-700 dark:text-white bg-white dark:bg-navy-700" />
-                    </div>
-                  )}
-                </div>
               </div>
             )}
+
+            {/* SECCIÓN 4: ANTICONCEPCIÓN Y TERAPIA HORMONAL (ACCESIBLE PARA TODAS LAS PACIENTES) */}
+            <div className="bg-white dark:bg-navy-800 rounded-2xl p-6 sm:p-7 border border-gray-100 dark:border-navy-700 shadow-sm space-y-5">
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-navy-700 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-teal-100 dark:bg-teal-900/40 flex items-center justify-center text-teal-600 dark:text-teal-300 font-bold">
+                    <MdMedication size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-navy-700 dark:text-white text-sm">Anticoncepción y Terapia Hormonal</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Uso actual para control de fertilidad, regulación del ciclo menstrual o tratamiento de SOP</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-gray-50 dark:bg-navy-700 p-4 rounded-xl border border-gray-200 dark:border-navy-600">
+                <div>
+                  <span className="text-xs font-bold text-navy-700 dark:text-white block">
+                    ¿La paciente utiliza anticonceptivos o terapia hormonal actualmente?
+                  </span>
+                  <span className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 block">
+                    En pacientes con SOP, los anticonceptivos se usan frecuentemente como tratamiento para inducir la ciclicidad o frenar el acné/hirsutismo, aún sin inicio de vida sexual.
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForm(p => ({
+                        ...p,
+                        usa_anticonceptivos: true,
+                        tipo_anticonceptivo: p.tipo_anticonceptivo || OPCIONES_ANTICONCEPTIVOS[0]
+                      }));
+                    }}
+                    className={`px-5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                      form.usa_anticonceptivos
+                        ? "bg-teal-600 text-white shadow-md"
+                        : "bg-white text-navy-700 border border-gray-200 hover:bg-gray-100 dark:bg-navy-800 dark:text-gray-300 dark:border-navy-600"
+                    }`}
+                  >
+                    <MdCheck size={16} /> Sí (En Uso)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForm(p => ({
+                        ...p,
+                        usa_anticonceptivos: false,
+                        tipo_anticonceptivo: ""
+                      }));
+                    }}
+                    className={`px-5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                      !form.usa_anticonceptivos
+                        ? "bg-navy-700 text-white shadow-md dark:bg-navy-600"
+                        : "bg-white text-navy-700 border border-gray-200 hover:bg-gray-100 dark:bg-navy-800 dark:text-gray-300 dark:border-navy-600"
+                    }`}
+                  >
+                    <MdClose size={16} /> No (Sin Uso)
+                  </button>
+                </div>
+              </div>
+
+              {form.usa_anticonceptivos && (
+                <div className="p-4 bg-teal-50/60 dark:bg-teal-950/20 rounded-xl border border-teal-200 dark:border-teal-800/40 space-y-4 animate-fade-in-up">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-navy-700 dark:text-white mb-1">
+                        Tipo de Método / Anticonceptivo *
+                      </label>
+                      <select
+                        value={
+                          OPCIONES_ANTICONCEPTIVOS.includes(form.tipo_anticonceptivo)
+                            ? form.tipo_anticonceptivo
+                            : "Otro (Especificar)"
+                        }
+                        onChange={e => {
+                          const val = e.target.value;
+                          setForm(p => ({
+                            ...p,
+                            tipo_anticonceptivo: val === "Otro (Especificar)" ? "" : val
+                          }));
+                        }}
+                        className="w-full border border-gray-200 dark:border-navy-600 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-navy-700 dark:text-white bg-white dark:bg-navy-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      >
+                        {OPCIONES_ANTICONCEPTIVOS.map(op => (
+                          <option key={op} value={op}>{op}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-navy-700 dark:text-white mb-1">
+                        Detalle / Principio Activo / Marca
+                      </label>
+                      <input
+                        type="text"
+                        value={form.tipo_anticonceptivo}
+                        onChange={e => setForm(p => ({ ...p, tipo_anticonceptivo: e.target.value }))}
+                        placeholder="Ej: Diane 35, Yaz, Levonorgestrel 52mg, Acetato de ciproterona..."
+                        className="w-full border border-gray-200 dark:border-navy-600 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-navy-700 dark:text-white bg-white dark:bg-navy-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* SECCIÓN 4: FACTORES DE RIESGO Y COMORBILIDADES */}
             <div className="bg-white dark:bg-navy-800 rounded-2xl p-6 sm:p-7 border border-gray-100 dark:border-navy-700 shadow-sm space-y-5">
@@ -592,6 +796,102 @@ export default function AntecedentesView() {
             </div>
 
           </form>
+        </div>
+      )}
+
+      {/* ── MODAL DE SEGURIDAD CLÍNICA: REVERSIÓN DE SEXARCA ── */}
+      {modalSexarcaAbierto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-navy-800 p-6 shadow-2xl border border-rose-200 dark:border-rose-800 space-y-4">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="w-12 h-12 rounded-xl bg-rose-100 dark:bg-rose-900/40 flex items-center justify-center font-bold">
+                <MdWarning size={28} />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-navy-700 dark:text-white">Dato Biológico Irreversible</h3>
+                <p className="text-xs text-rose-600 font-semibold">Advertencia de Seguridad Clínica</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+              La paciente ya tiene registrado el <strong>inicio de vida sexual (Sexarca Activa)</strong> en su expediente clínico. Biológicamente, la sexarca es una condición que no puede revertirse a "No".
+            </p>
+
+            <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800/40 text-[11px] text-amber-900 dark:text-amber-300 font-medium">
+              ⚠️ Si cambia a <strong>"No"</strong>, se reiniciarán a cero todos los antecedentes obstétricos asociados (gestas, partos, cesáreas y abortos).
+            </div>
+
+            <p className="text-xs text-navy-700 dark:text-white font-bold">
+              ¿Desea continuar únicamente para corregir una equivocación inicial de registro?
+            </p>
+
+            <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setModalSexarcaAbierto(false)}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold text-gray-700 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-navy-700 dark:hover:bg-navy-600 transition"
+              >
+                Cancelar (Mantener Sexarca)
+              </button>
+              <button
+                type="button"
+                onClick={confirmarReversionSexarca}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-500/20 transition"
+              >
+                Sí, Corregir Registro
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL DE SEGURIDAD CLÍNICA: DESBLOQUEO DE EDAD DE MENARQUÍA ── */}
+      {modalMenarquiaAbierto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-navy-800 p-6 shadow-2xl border border-purple-200 dark:border-purple-800 space-y-4">
+            <div className="flex items-center gap-3 text-purple-600 dark:text-purple-300">
+              <div className="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center font-bold">
+                <MdLock size={28} />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-navy-700 dark:text-white">Dato Histórico Fijo</h3>
+                <p className="text-xs text-purple-600 dark:text-purple-400 font-semibold">Edad de Primera Menstruación</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+              La <strong>Edad de Menarquía ({menarquiaPrevia} años)</strong> es un antecedente biológico fijo que no cambia con el transcurso del tiempo ni con terapias.
+            </p>
+
+            <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-200 dark:border-purple-800/40 text-[11px] text-purple-900 dark:text-purple-300 font-medium">
+              🔒 El campo se encuentra bloqueado para prevenir modificaciones accidentales.
+            </div>
+
+            <p className="text-xs text-navy-700 dark:text-white font-bold">
+              ¿Desea desbloquear la casilla para corregir una equivocación de tipeo?
+            </p>
+
+            <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setModalMenarquiaAbierto(false)}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold text-gray-700 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-navy-700 dark:hover:bg-navy-600 transition"
+              >
+                Mantener ({menarquiaPrevia} años)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenarquiaDesbloqueada(true);
+                  setModalMenarquiaAbierto(false);
+                  showToast("Casilla de menarquía desbloqueada para corrección", "ok");
+                }}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-md shadow-purple-500/20 transition"
+              >
+                Desbloquear Campo
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   MdPeople, MdFormatListBulleted, MdCalendarMonth,
   MdCheckCircle, MdArrowForward, MdMedicalServices,
-  MdImageSearch, MdAdd, MdRefresh,
+  MdImageSearch, MdAdd, MdRefresh, MdSearch,
 } from "react-icons/md";
 import {
   listarPacientes,
@@ -39,6 +39,12 @@ const MainDashboard = () => {
   const [citas, setCitas] = useState<CitaOut[]>([]);
   const [cargando, setCargando] = useState(true);
 
+  // Buscador de Pacientes en Tiempo Real (HU-005)
+  const [busquedaPaciente, setBusquedaPaciente] = useState("");
+  const [resultadosBusqueda, setResultadosBusqueda] = useState<PacienteListItem[]>([]);
+  const [buscandoPaciente, setBuscandoPaciente] = useState(false);
+  const [busquedaRealizada, setBusquedaRealizada] = useState(false);
+
   const cargarDatosDashboard = async () => {
     try {
       setCargando(true);
@@ -60,6 +66,30 @@ const MainDashboard = () => {
   useEffect(() => {
     cargarDatosDashboard();
   }, []);
+
+  // Búsqueda en tiempo real de pacientes (HU-005)
+  useEffect(() => {
+    const q = busquedaPaciente.trim();
+    if (!q) {
+      setResultadosBusqueda([]);
+      setBusquedaRealizada(false);
+      return;
+    }
+    setBuscandoPaciente(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await listarPacientes(q, true, 1, 6);
+        setResultadosBusqueda(res);
+        setBusquedaRealizada(true);
+      } catch {
+        setResultadosBusqueda([]);
+        setBusquedaRealizada(true);
+      } finally {
+        setBuscandoPaciente(false);
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [busquedaPaciente]);
 
   const countPacientes = useCounter(pacientes.length);
   const countConsultas = useCounter(consultas.length);
@@ -127,6 +157,72 @@ const MainDashboard = () => {
             <MdRefresh className="h-4 w-4" /> Actualizar Datos
           </button>
         </div>
+      </div>
+
+      {/* ── BUSCADOR DE PACIENTES EN TIEMPO REAL (HU-005) ── */}
+      <div className="bg-white dark:bg-navy-800 rounded-3xl border border-slate-200/80 dark:border-navy-700 p-5 sm:p-6 shadow-sm">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-10 h-10 rounded-2xl bg-rose-50 dark:bg-rose-950/30 text-rose-500 flex items-center justify-center">
+            <MdSearch size={22} />
+          </div>
+          <div>
+            <h2 className="text-sm sm:text-base font-extrabold text-slate-800 dark:text-white tracking-tight">
+              Búsqueda de Pacientes 
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Busque por nombre completo o número de Cédula de Identidad (CI) para acceder directamente al perfil.
+            </p>
+          </div>
+        </div>
+
+        <div className="relative">
+          <MdSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+          <input
+            type="text"
+            placeholder="Escriba el nombre, apellido o número de CI de la paciente..."
+            value={busquedaPaciente}
+            onChange={(e) => setBusquedaPaciente(e.target.value)}
+            className="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-navy-600 rounded-2xl text-sm font-semibold text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all shadow-inner"
+          />
+        </div>
+
+        {/* Resultados en tiempo real (Criterio HU-005) */}
+        {busquedaRealizada && (
+          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-navy-700">
+            {buscandoPaciente ? (
+              <div className="py-4 text-center text-xs font-bold text-slate-400 flex items-center justify-center gap-2">
+                <div className="w-4 h-4 border-2 border-rose-500 border-t-transparent rounded-full animate-spin" />
+                <span>Buscando pacientes en la base de datos...</span>
+              </div>
+            ) : resultadosBusqueda.length === 0 ? (
+              <div className="py-4 text-center text-sm font-bold text-slate-500 dark:text-slate-400">
+                No se encontraron pacientes
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {resultadosBusqueda.map((p) => (
+                  <div
+                    key={p.id}
+                    onClick={() => navigate(`/admin/pacientes/${p.id}`)}
+                    className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-navy-600 bg-white dark:bg-navy-900/60 hover:border-rose-300 dark:hover:border-rose-500/50 hover:shadow-md transition-all cursor-pointer flex items-center justify-between group"
+                  >
+                    <div className="min-w-0 pr-2">
+                      <p className="font-extrabold text-xs text-slate-900 dark:text-white truncate group-hover:text-rose-600 transition-colors">
+                        {p.nombre} {p.primer_apellido} {p.segundo_apellido || ""}
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">
+                        CI: <span className="font-bold text-slate-700 dark:text-slate-300">{p.ci || "Sin CI"}</span>
+                      </p>
+                    </div>
+                    <div className="w-7 h-7 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-500 flex items-center justify-center flex-shrink-0 group-hover:bg-rose-500 group-hover:text-white transition-all">
+                      <MdArrowForward size={16} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── MÉTRICAS CLÍNICAS PRINCIPALES ── */}
