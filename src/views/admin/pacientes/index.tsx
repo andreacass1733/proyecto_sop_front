@@ -9,7 +9,6 @@ import {
 } from "react-icons/md";
 import {
   listarPacientes, crearPaciente, actualizarPaciente,
-  obtenerAntecedentes, guardarAntecedentes,
   PacienteListItem, PacienteCreate
 } from "services/api";
 
@@ -79,290 +78,6 @@ const ModalConfirmacion = ({
   );
 };
 
-// ── Modal de Antecedentes Médicos Directo ─────────────────────────────────────
-const AntecedentesModal = ({
-  paciente,
-  onClose,
-  onSaved,
-}: {
-  paciente: PacienteListItem;
-  onClose: () => void;
-  onSaved: () => void;
-}) => {
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving]   = useState(false);
-  const [error, setError]     = useState<string | null>(null);
-
-  const [form, setForm] = useState({
-    iniciada_vida_sexual: false,
-    edad_menarquia: "" as number | "",
-    tipo_ciclo: "regular",
-    duracion_ciclo_habitual: 28 as number | "",
-    gestas: 0,
-    partos: 0,
-    cesareas: 0,
-    abortos: 0,
-    hijos_vivos: 0,
-    usa_anticonceptivos: false,
-    tipo_anticonceptivo: "",
-    familiar_con_sop: false,
-    familiar_con_diabetes: false,
-    diabetes: false,
-    hipotiroidismo: false,
-    hiperprolactinemia: false,
-    resistencia_insulina: false,
-    observaciones: "",
-  });
-
-  useEffect(() => {
-    async function Cargar() {
-      setLoading(true);
-      try {
-        const datos = await obtenerAntecedentes(paciente.id);
-        setForm({
-          iniciada_vida_sexual: (datos as any).iniciada_vida_sexual ?? (datos.gestas > 0 || datos.usa_anticonceptivos),
-          edad_menarquia: datos.edad_menarquia ?? "",
-          tipo_ciclo: datos.tipo_ciclo ?? "regular",
-          duracion_ciclo_habitual: datos.duracion_ciclo_habitual ?? 28,
-          gestas: datos.gestas ?? 0,
-          partos: datos.partos ?? 0,
-          cesareas: datos.cesareas ?? 0,
-          abortos: datos.abortos ?? 0,
-          hijos_vivos: datos.hijos_vivos ?? 0,
-          usa_anticonceptivos: datos.usa_anticonceptivos ?? false,
-          tipo_anticonceptivo: datos.tipo_anticonceptivo ?? "",
-          familiar_con_sop: datos.familiar_con_sop ?? false,
-          familiar_con_diabetes: datos.familiar_con_diabetes ?? false,
-          diabetes: datos.diabetes ?? false,
-          hipotiroidismo: datos.hipotiroidismo ?? false,
-          hiperprolactinemia: (datos as any).hiperprolactinemia ?? false,
-          resistencia_insulina: datos.resistencia_insulina ?? false,
-          observaciones: datos.observaciones ?? "",
-        });
-      } catch (err: any) {
-        if (err.message !== "SIN_ANTECEDENTES") {
-          console.warn("No antecedents found", err);
-        }
-      } finally {
-        setLoading(false);
-      }
-    }
-    Cargar();
-  }, [paciente.id]);
-
-  const handleSexarca = (activa: boolean) => {
-    setForm(prev => ({
-      ...prev,
-      iniciada_vida_sexual: activa,
-      ...(activa ? {} : {
-        gestas: 0, partos: 0, cesareas: 0, abortos: 0, hijos_vivos: 0,
-        usa_anticonceptivos: false, tipo_anticonceptivo: ""
-      })
-    }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    setError(null);
-    try {
-      const payload: any = {
-        iniciada_vida_sexual: form.iniciada_vida_sexual,
-        edad_menarquia: form.edad_menarquia === "" ? null : Number(form.edad_menarquia),
-        tipo_ciclo: form.tipo_ciclo,
-        duracion_ciclo_habitual: form.duracion_ciclo_habitual === "" ? null : Number(form.duracion_ciclo_habitual),
-        gestas: form.iniciada_vida_sexual ? Number(form.gestas) : 0,
-        partos: form.iniciada_vida_sexual ? Number(form.partos) : 0,
-        cesareas: form.iniciada_vida_sexual ? Number(form.cesareas) : 0,
-        abortos: form.iniciada_vida_sexual ? Number(form.abortos) : 0,
-        hijos_vivos: form.iniciada_vida_sexual ? Number(form.hijos_vivos) : 0,
-        usa_anticonceptivos: form.iniciada_vida_sexual ? form.usa_anticonceptivos : false,
-        tipo_anticonceptivo: form.iniciada_vida_sexual && form.usa_anticonceptivos ? form.tipo_anticonceptivo : null,
-        familiar_con_sop: form.familiar_con_sop,
-        familiar_con_diabetes: form.familiar_con_diabetes,
-        diabetes: form.diabetes,
-        hipotiroidismo: form.hipotiroidismo,
-        hiperprolactinemia: form.hiperprolactinemia,
-        resistencia_insulina: form.resistencia_insulina,
-        observaciones: form.observaciones || null,
-      };
-
-      await guardarAntecedentes(paciente.id, payload);
-      onSaved();
-      onClose();
-    } catch (err: any) {
-      setError(err.message || "Error al guardar antecedentes médicos");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const nombrePaciente = [paciente.nombre, paciente.primer_apellido, paciente.segundo_apellido].filter(Boolean).join(" ");
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in-up">
-      <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden" style={{ maxHeight: "90vh", overflowY: "auto" }}>
-        
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-purple-500 to-rose-500 flex items-center justify-center text-white font-bold">
-              <MdMedicalServices size={22} />
-            </div>
-            <div>
-              <h2 className="font-extrabold text-slate-800 text-base leading-none">Antecedentes Médicos</h2>
-              <p className="text-xs text-rose-600 font-bold mt-1">{nombrePaciente} • CI: {paciente.ci || "Sin CI"}</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-200">
-            <MdClose size={20} />
-          </button>
-        </div>
-
-        {loading ? (
-          <div className="p-8 text-center text-xs font-bold text-slate-500">Cargando expediente...</div>
-        ) : (
-          <form onSubmit={handleSubmit} className="p-6 space-y-5 bg-white">
-            
-            {/* Sexarca */}
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-                <span className="text-xs font-extrabold text-slate-800">¿Ha iniciado vida sexual? (Sexarca Activa) *</span>
-                <div className="flex items-center gap-2">
-                  <button type="button" onClick={() => handleSexarca(true)}
-                    className={`px-4 py-1.5 rounded-xl text-xs font-black transition ${form.iniciada_vida_sexual ? "bg-rose-600 text-white shadow" : "bg-slate-200 text-slate-800 border border-slate-300"}`}>
-                    Sí (Sexarca Activa)
-                  </button>
-                  <button type="button" onClick={() => handleSexarca(false)}
-                    className={`px-4 py-1.5 rounded-xl text-xs font-black transition ${!form.iniciada_vida_sexual ? "bg-slate-900 text-white shadow" : "bg-slate-200 text-slate-800 border border-slate-300"}`}>
-                    No (Sin Sexarca)
-                  </button>
-                </div>
-              </div>
-              {!form.iniciada_vida_sexual && (
-                <p className="text-[11px] text-amber-800 font-semibold bg-amber-50 p-2.5 rounded-xl border border-amber-200">
-                  • Sin sexarca activa: Los datos obstétricos (gestas, partos, abortos) y métodos anticonceptivos se ocultan de la ficha clínica.
-                </p>
-              )}
-            </div>
-
-            {/* Ginecológico */}
-            <div className="space-y-3">
-              <p className="text-xs font-extrabold text-purple-600 uppercase tracking-widest">Historial Ginecológico</p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Edad Menarquia</label>
-                  <input type="number" min={8} max={20} value={form.edad_menarquia}
-                    onChange={e => setForm(p => ({ ...p, edad_menarquia: e.target.value === "" ? "" : Number(e.target.value) }))}
-                    placeholder="Ej: 12" className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 bg-white" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Patrón del Ciclo</label>
-                  <select value={form.tipo_ciclo} onChange={e => setForm(p => ({ ...p, tipo_ciclo: e.target.value }))}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 bg-white">
-                    <option value="regular">Regular (21-35 días)</option>
-                    <option value="irregular">Irregular</option>
-                    <option value="oligomenorrea">Oligomenorrea (&gt;35 días)</option>
-                    <option value="amenorrea">Amenorrea</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Duración Días</label>
-                  <input type="number" min={1} max={90} value={form.duracion_ciclo_habitual}
-                    onChange={e => setForm(p => ({ ...p, duracion_ciclo_habitual: e.target.value === "" ? "" : Number(e.target.value) }))}
-                    placeholder="Ej: 5 o 28" className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 bg-white" />
-                </div>
-              </div>
-            </div>
-
-            {/* Obstétrico (OCULTO SI NO TIENE SEXARCA) */}
-            {form.iniciada_vida_sexual && (
-              <div className="space-y-3 animate-fade-in-up">
-                <p className="text-xs font-extrabold text-rose-600 uppercase tracking-widest">Obstétrico y Anticoncepción (Solo Sexarca Activa)</p>
-                <div className="grid grid-cols-5 gap-2">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700">Gestas</label>
-                    <input type="number" min={0} value={form.gestas} onChange={e => setForm(p => ({ ...p, gestas: Number(e.target.value) }))}
-                      className="w-full border border-slate-300 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-900 bg-white" />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700">Partos</label>
-                    <input type="number" min={0} value={form.partos} onChange={e => setForm(p => ({ ...p, partos: Number(e.target.value) }))}
-                      className="w-full border border-slate-300 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-900 bg-white" />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700">Cesáreas</label>
-                    <input type="number" min={0} value={form.cesareas} onChange={e => setForm(p => ({ ...p, cesareas: Number(e.target.value) }))}
-                      className="w-full border border-slate-300 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-900 bg-white" />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700">Abortos</label>
-                    <input type="number" min={0} value={form.abortos} onChange={e => setForm(p => ({ ...p, abortos: Number(e.target.value) }))}
-                      className="w-full border border-slate-300 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-900 bg-white" />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700">Hijos Vivos</label>
-                    <input type="number" min={0} value={form.hijos_vivos} onChange={e => setForm(p => ({ ...p, hijos_vivos: Number(e.target.value) }))}
-                      className="w-full border border-slate-300 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-900 bg-white" />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Factores de riesgo */}
-            <div className="space-y-2">
-              <p className="text-xs font-extrabold text-slate-600 uppercase tracking-widest">Factores de Riesgo / Patologías</p>
-              <div className="grid grid-cols-2 gap-2 text-xs font-bold text-slate-800">
-                <label className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
-                  <span>Familiar con SOP</span>
-                  <input type="checkbox" checked={form.familiar_con_sop} onChange={e => setForm(p => ({ ...p, familiar_con_sop: e.target.checked }))} className="w-4 h-4 text-rose-600" />
-                </label>
-                <label className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
-                  <span>Familiar con Diabetes</span>
-                  <input type="checkbox" checked={form.familiar_con_diabetes} onChange={e => setForm(p => ({ ...p, familiar_con_diabetes: e.target.checked }))} className="w-4 h-4 text-rose-600" />
-                </label>
-                <label className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
-                  <span>Diabetes Personal</span>
-                  <input type="checkbox" checked={form.diabetes} onChange={e => setForm(p => ({ ...p, diabetes: e.target.checked }))} className="w-4 h-4 text-rose-600" />
-                </label>
-                <label className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
-                  <span>Hipotiroidismo</span>
-                  <input type="checkbox" checked={form.hipotiroidismo} onChange={e => setForm(p => ({ ...p, hipotiroidismo: e.target.checked }))} className="w-4 h-4 text-rose-600" />
-                </label>
-                <label className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
-                  <span>Hiperprolactinemia</span>
-                  <input type="checkbox" checked={form.hiperprolactinemia} onChange={e => setForm(p => ({ ...p, hiperprolactinemia: e.target.checked }))} className="w-4 h-4 text-rose-600" />
-                </label>
-                <label className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
-                  <span>Resistencia a Insulina</span>
-                  <input type="checkbox" checked={form.resistencia_insulina} onChange={e => setForm(p => ({ ...p, resistencia_insulina: e.target.checked }))} className="w-4 h-4 text-rose-600" />
-                </label>
-              </div>
-            </div>
-
-            {/* Observaciones */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Observaciones Clínicas</label>
-              <textarea rows={2} value={form.observaciones} onChange={e => setForm(p => ({ ...p, observaciones: e.target.value }))}
-                placeholder="Anotaciones médicas..." className="w-full border border-slate-300 rounded-xl p-3 text-xs font-semibold text-slate-900 bg-white" />
-            </div>
-
-            {error && <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-bold text-rose-700">{error}</div>}
-
-            <div className="flex gap-3 pt-1">
-              <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl font-bold text-xs text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-200">Cancelar</button>
-              <button type="submit" disabled={saving} className="flex-1 py-3 rounded-xl font-bold text-xs text-white bg-gradient-to-r from-rose-500 to-purple-600 shadow-md">
-                {saving ? "Guardando..." : "Guardar Antecedentes"}
-              </button>
-            </div>
-
-          </form>
-        )}
-      </div>
-    </div>
-  );
-};
-
 // ── Modal Nuevo / Editar Paciente ────────────────────────────────────────────
 const PacienteModal = ({
   onClose, onSaved, editando,
@@ -391,6 +106,15 @@ const PacienteModal = ({
     e.preventDefault();
     setSaving(true);
     setError(null);
+
+    // Validación HU-003: La fecha de nacimiento no puede ser una fecha futura
+    const hoyStr = new Date().toISOString().split("T")[0];
+    if (form.fecha_nacimiento && form.fecha_nacimiento > hoyStr) {
+      setError("La fecha de nacimiento no puede ser una fecha futura.");
+      setSaving(false);
+      return;
+    }
+
     const payload: any = {};
     Object.entries(form).forEach(([k, v]) => { if (v !== "") payload[k] = v; });
     try {
@@ -401,8 +125,8 @@ const PacienteModal = ({
       } else {
         const nuevoP = await crearPaciente(payload);
         onClose();
-        // Redireccionar directamente a la página dedicada de Antecedentes Médicos
-        navigate(`/admin/antecedentes?pacienteId=${nuevoP.id}`);
+        // Redireccionar al expediente clínico completo del paciente
+        navigate(`/admin/pacientes/${nuevoP.id}`);
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error al guardar el paciente");
@@ -481,6 +205,7 @@ const PacienteModal = ({
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Fecha de nacimiento</label>
                 <input name="fecha_nacimiento" type="date" value={form.fecha_nacimiento ?? ""} onChange={set}
+                  max={new Date().toISOString().split("T")[0]}
                   className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/30 focus:border-rose-500 transition shadow-sm" />
               </div>
             </div>
@@ -550,7 +275,6 @@ const Pacientes = () => {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [editando, setEditando]         = useState<PacienteListItem | null>(null);
   const [confirmarPaciente, setConfirmarPaciente] = useState<PacienteListItem | null>(null);
-  const [antecedentesPaciente, setAntecedentesPaciente] = useState<PacienteListItem | null>(null);
   
   const [errorApi, setErrorApi]         = useState<string | null>(null);
   const [toast, setToast]               = useState<{ msg: string; tipo: "ok" | "error" } | null>(null);
@@ -759,9 +483,15 @@ const Pacientes = () => {
 
             {/* Acciones */}
             <div className="col-span-1 flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}>
-              <button title="Editar paciente"
+              <button title="Ver expediente y antecedentes clínicos"
+                onClick={e => { e.stopPropagation(); navigate(`/admin/pacientes/${p.id}`); }}
+                className="w-8 h-8 rounded-xl flex items-center justify-center text-purple-600 hover:text-purple-700 hover:bg-purple-50 transition-all">
+                <MdMedicalServices size={16} />
+              </button>
+
+              <button title="Editar datos básicos"
                 onClick={e => { e.stopPropagation(); setEditando(p); setModalAbierto(true); }}
-                className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-500 hover:text-purple-600 hover:bg-purple-100/60 transition-all">
+                className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-all">
                 <MdEdit size={16} />
               </button>
 
@@ -809,15 +539,6 @@ const Pacientes = () => {
           onClose={() => { setModalAbierto(false); setEditando(null); }}
           onSaved={() => { cargar(); showToast(editando ? "Datos actualizados" : "Paciente registrado"); }}
           editando={editando}
-        />
-      )}
-
-      {/* Modal Antecedentes Médicos Directo */}
-      {antecedentesPaciente && (
-        <AntecedentesModal
-          paciente={antecedentesPaciente}
-          onClose={() => setAntecedentesPaciente(null)}
-          onSaved={() => showToast("Antecedentes médicos guardados correctamente")}
         />
       )}
 

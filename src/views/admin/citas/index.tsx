@@ -52,6 +52,7 @@ const CitasView: React.FC = () => {
   const [guardando, setGuardando] = useState(false);
   const [pacienteId, setPacienteId] = useState("");
   const [modalFecha, setModalFecha] = useState("");
+  const [modalFechaProxima, setModalFechaProxima] = useState("");
   const [modalTurno, setModalTurno] = useState<"AM" | "PM">("AM");
   const [modalHora, setModalHora] = useState("07");
   const [modalMinuto, setModalMinuto] = useState("00");
@@ -154,25 +155,50 @@ const CitasView: React.FC = () => {
       return;
     }
 
+    // Validación HU-007: La fecha tentativa de próxima cita debe ser posterior a la fecha de atención
+    if (modalFechaProxima) {
+      const fechaProx = new Date(modalFechaProxima + "T23:59:59");
+      if (fechaProx.getTime() <= fechaHoraLocal.getTime()) {
+        showToast("La fecha tentativa de próxima cita debe ser posterior a la fecha de atención.", "error");
+        return;
+      }
+    }
+
     try {
       setGuardando(true);
       await crearCita({
         paciente_id: pacienteId || undefined,
         fecha_atencion: fechaHoraLocal.toISOString(),
+        fecha_proxima_cita: modalFechaProxima || undefined,
         motivo,
         observaciones,
         estado: "programada",
       });
       setMostrarModal(false);
       setPacienteId("");
+      setModalFechaProxima("");
       setMotivo("");
       setObservaciones("");
       showToast("Cita médica agendada con éxito", "success");
       await cargarDatos();
-    } catch (err) {
-      showToast("Error al agendar la cita médica", "error");
+    } catch (err: any) {
+      showToast(err.message || "Error al agendar la cita médica", "error");
     } finally {
       setGuardando(false);
+    }
+  };
+
+  // HU-008: Actualización inmediata del estado de la cita
+  const handleCambiarEstadoCita = async (citaId: string, nuevoEstado: string) => {
+    try {
+      await actualizarCita(citaId, { estado: nuevoEstado });
+      // Reflejo inmediato en la interfaz sin recargar la página (HU-008)
+      setCitas((prev) =>
+        prev.map((c) => (c.id === citaId ? { ...c, estado: nuevoEstado } : c))
+      );
+      showToast(`Estado de la cita actualizado a "${nuevoEstado}"`, "success");
+    } catch {
+      showToast("Error al actualizar el estado de la cita", "error");
     }
   };
 
@@ -185,7 +211,7 @@ const CitasView: React.FC = () => {
         observaciones: c.observaciones || undefined,
         estado: "en_proceso",
       });
-      await actualizarCita(c.id, { estado: "en_proceso" });
+      await handleCambiarEstadoCita(c.id, "atendida");
       showToast("Consulta iniciada correctamente", "success");
       navigate("/admin/consultas");
     } catch (err) {
@@ -200,13 +226,23 @@ const CitasView: React.FC = () => {
     return p ? `${p.nombre} ${p.primer_apellido}` : "Paciente registrado";
   };
 
+  // HU-008: Estados disponibles (programada, atendida, cancelada, no asistió)
   const renderBadgeEstado = (estado: string) => {
     switch (estado) {
-      case "programada": return <span className="text-amber-600 bg-amber-100 px-2 py-0.5 rounded text-xs font-semibold">Programada</span>;
-      case "en_proceso": return <span className="text-blue-600 bg-blue-100 px-2 py-0.5 rounded text-xs font-semibold">En Atención</span>;
-      case "atendida": return <span className="text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded text-xs font-semibold">Atendida</span>;
-      case "cancelada": return <span className="text-rose-600 bg-rose-100 px-2 py-0.5 rounded text-xs font-semibold">Cancelada</span>;
-      default: return <span className="text-gray-600 bg-gray-100 px-2 py-0.5 rounded text-xs font-semibold">{estado}</span>;
+      case "programada":
+        return <span className="text-amber-700 bg-amber-100 px-2.5 py-0.5 rounded-full text-xs font-bold border border-amber-200">Programada</span>;
+      case "atendida":
+        return <span className="text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full text-xs font-bold border border-emerald-200">Atendida</span>;
+      case "cancelada":
+        return <span className="text-rose-700 bg-rose-100 px-2.5 py-0.5 rounded-full text-xs font-bold border border-rose-200">Cancelada</span>;
+      case "no asistió":
+      case "no_asistio":
+      case "no asistio":
+        return <span className="text-purple-700 bg-purple-100 px-2.5 py-0.5 rounded-full text-xs font-bold border border-purple-200">No asistió</span>;
+      case "en_proceso":
+        return <span className="text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded-full text-xs font-bold border border-blue-200">En Atención</span>;
+      default:
+        return <span className="text-gray-700 bg-gray-100 px-2.5 py-0.5 rounded-full text-xs font-bold">{estado}</span>;
     }
   };
 
@@ -217,7 +253,10 @@ const CitasView: React.FC = () => {
     const q = busqueda.toLowerCase().trim();
 
     const coincideBusqueda = !q || pacienteNombre.includes(q) || motivoText.includes(q);
-    const coincideEstado = filtroEstado === "todos" || c.estado === filtroEstado;
+    const coincideEstado =
+      filtroEstado === "todos" ||
+      c.estado === filtroEstado ||
+      (filtroEstado === "no asistió" && (c.estado === "no asistio" || c.estado === "no_asistio"));
 
     return coincideBusqueda && coincideEstado;
   });
@@ -291,9 +330,9 @@ const CitasView: React.FC = () => {
             >
               <option value="todos">Todos los Estados</option>
               <option value="programada">Programadas</option>
-              <option value="en_proceso">En Atención</option>
               <option value="atendida">Atendidas</option>
               <option value="cancelada">Canceladas</option>
+              <option value="no asistió">No asistió</option>
             </select>
           </div>
 
@@ -436,17 +475,37 @@ const CitasView: React.FC = () => {
                       {isExpanded && (
                         <div className="p-3 bg-gray-50 dark:bg-navy-900 border-t border-gray-100 dark:border-navy-700 text-xs">
                           <p className="mb-1.5"><strong className="text-navy-700 dark:text-white">Motivo:</strong> {c.motivo || "No especificado"}</p>
+                          {c.fecha_proxima_cita && (
+                            <p className="mb-1.5 text-purple-600 dark:text-purple-400 font-semibold">
+                              <strong>Próxima cita tentativa:</strong> {new Date(c.fecha_proxima_cita).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
+                            </p>
+                          )}
                           <p className="mb-3 text-gray-600 dark:text-gray-300"><strong className="text-navy-700 dark:text-white">Observaciones:</strong> {c.observaciones || "Sin observaciones"}</p>
                           
-                          <div className="flex justify-end gap-2 pt-2 border-t border-gray-200 dark:border-navy-700">
-                             {c.estado === "programada" && (
-                               <button
-                                 onClick={() => handleIniciarConsulta(c)}
-                                 className="px-3 py-1.5 bg-brand-500 text-white rounded text-xs font-semibold hover:bg-brand-600 transition"
-                               >
-                                 Iniciar Consulta
-                               </button>
-                             )}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-gray-200 dark:border-navy-700">
+                            {/* Selector de Estado Directo (HU-008) */}
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-700 dark:text-slate-300 text-[11px] uppercase tracking-wider">Estado:</span>
+                              <select
+                                value={c.estado === "no_asistio" ? "no asistió" : (c.estado || "programada")}
+                                onChange={(e) => handleCambiarEstadoCita(c.id, e.target.value)}
+                                className="rounded-lg border border-slate-300 dark:border-navy-600 bg-white dark:bg-navy-800 px-2.5 py-1 text-xs font-bold text-slate-800 dark:text-white outline-none cursor-pointer focus:ring-2 focus:ring-brand-500 shadow-sm"
+                              >
+                                <option value="programada">Programada</option>
+                                <option value="atendida">Atendida</option>
+                                <option value="cancelada">Cancelada</option>
+                                <option value="no asistió">No asistió</option>
+                              </select>
+                            </div>
+
+                            {c.estado === "programada" && (
+                              <button
+                                onClick={() => handleIniciarConsulta(c)}
+                                className="px-3 py-1.5 bg-brand-500 text-white rounded-lg text-xs font-semibold hover:bg-brand-600 transition shadow-sm"
+                              >
+                                Iniciar Consulta
+                              </button>
+                            )}
                           </div>
                         </div>
                       )}
@@ -576,6 +635,22 @@ const CitasView: React.FC = () => {
                     </select>
                   </div>
                 </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
+                  Fecha tentativa de próxima cita <span className="text-gray-400 font-normal lowercase"></span>
+                </label>
+                <input
+                  type="date"
+                  min={modalFecha || getTodayFormatted()}
+                  value={modalFechaProxima}
+                  onChange={(e) => setModalFechaProxima(e.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 p-2.5 text-sm text-navy-700 outline-none dark:bg-navy-900 dark:border-navy-600 dark:text-white"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Debe ser posterior a la fecha de atención médica.
+                </p>
               </div>
 
               <div>

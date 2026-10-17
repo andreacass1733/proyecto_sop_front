@@ -1,17 +1,48 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   MdUpload, MdWarning, MdCheckCircle,
   MdCancel, MdOutlineAnalytics, MdCenterFocusStrong, MdPerson, MdDelete, MdLayers,
+  MdSearch, MdCompare, MdZoomIn, MdZoomOut, MdRestartAlt, MdClose, MdPrint, MdHistory, MdArrowForward,
+  MdCheck, MdOpenInNew, MdRefresh, MdInfoOutline
 } from "react-icons/md";
 import {
   predecirImagen,
   validarImagen,
   listarPacientes,
+  listarEstudiosEcograficos,
   PrediccionResponse,
   PacienteListItem,
+  EstudioEcograficoItem,
 } from "services/api";
 
-// ── Barra de probabilidad Médica ──────────────────────────────────────────
+// ── Formatear Fechas ────────────────────────────────────────────────────────
+function formatearFecha(iso?: string | null): string {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString("es-ES", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function calcularEdad(fechaNacimiento?: string | null): string {
+  if (!fechaNacimiento) return "—";
+  const hoy = new Date();
+  const nac = new Date(fechaNacimiento);
+  const edad = hoy.getFullYear() - nac.getFullYear();
+  const m = hoy.getMonth() - nac.getMonth();
+  return `${m < 0 || (m === 0 && hoy.getDate() < nac.getDate()) ? edad - 1 : edad} años`;
+}
+
+// ── Barra de Probabilidad ──────────────────────────────────────────────────
 const ProbBar = ({
   label,
   pct,
@@ -26,17 +57,17 @@ const ProbBar = ({
   const safePct = typeof pct === "number" && !isNaN(pct) ? Math.min(100, Math.max(0, pct)) : 0;
 
   return (
-    <div className="mb-6 last:mb-0">
-      <div className="flex justify-between items-center mb-2">
-        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+    <div className="mb-4 last:mb-0">
+      <div className="flex justify-between items-center mb-1.5">
+        <span className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
           <span className={`w-2.5 h-2.5 rounded-full ${barGradient.split(" ")[0].replace("from-", "bg-")}`} />
           {label}
         </span>
-        <span className={`text-base font-bold ${textColor} font-mono tracking-tight`}>
+        <span className={`text-sm font-extrabold ${textColor} font-mono tracking-tight`}>
           {safePct.toFixed(1)}%
         </span>
       </div>
-      <div className="h-3.5 bg-slate-100 dark:bg-navy-900/80 rounded-full overflow-hidden p-0.5 border border-slate-200/60 dark:border-navy-700/60">
+      <div className="h-3 bg-slate-100 dark:bg-navy-900 rounded-full overflow-hidden p-0.5 border border-slate-200/80 dark:border-navy-700">
         <div
           className={`h-full rounded-full bg-gradient-to-r ${barGradient} transition-all duration-700 ease-out`}
           style={{ width: `${safePct}%` }}
@@ -46,43 +77,129 @@ const ProbBar = ({
   );
 };
 
-// ── Componente Principal ──────────────────────────────────────────────────
+// ── Componente Principal ────────────────────────────────────────────────────
 const Analysis = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  // Pacientes
   const [pacientes, setPacientes] = useState<PacienteListItem[]>([]);
   const [pacienteId, setPacienteId] = useState<string>("");
+  const [busquedaPaciente, setBusquedaPaciente] = useState<string>("");
+  const [dropdownPacienteAbierto, setDropdownPacienteAbierto] = useState<boolean>(false);
 
+  // Imagen y Estado
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [analisisPaso, setAnalisisPaso] = useState<number>(0);
   const [result, setResult] = useState<PrediccionResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
-  // Validación clínica
+  // Modo de visualización de imagen (gradcam | original | split)
+  const [vistaImagen, setVistaImagen] = useState<"gradcam" | "original" | "split">("gradcam");
+  const [imagenModalZoom, setImagenModalZoom] = useState<string | null>(null);
+  const [zoomNivel, setZoomNivel] = useState<number>(1.8);
+  const [posicionPan, setPosicionPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  const abrirModalZoom = (url: string) => {
+    setImagenModalZoom(url);
+    setZoomNivel(1.8);
+    setPosicionPan({ x: 0, y: 0 });
+  };
+
+  const handleZoomIn = () => {
+    setZoomNivel((prev) => Math.min(4.5, Number((prev + 0.3).toFixed(2))));
+  };
+
+  const handleZoomOut = () => {
+    setZoomNivel((prev) => Math.max(0.7, Number((prev - 0.3).toFixed(2))));
+  };
+
+  const handleResetZoom = (factor: number = 1.0) => {
+    setZoomNivel(factor);
+    setPosicionPan({ x: 0, y: 0 });
+  };
+
+  // Validación médica
   const [validating, setValidating] = useState(false);
   const [validationDone, setValidationDone] = useState(false);
   const [validationLabel, setValidationLabel] = useState<"SOP" | "Normal" | null>(null);
+  const [observacionMedico, setObservacionMedico] = useState<string>("");
   const [validationError, setValidationError] = useState<string | null>(null);
 
+  // Historial de estudios de la paciente
+  const [estudiosPaciente, setEstudiosPaciente] = useState<EstudioEcograficoItem[]>([]);
+  const [cargandoEstudios, setCargandoEstudios] = useState(false);
+  const [tabEstudiosAbierto, setTabEstudiosAbierto] = useState(false);
+
+  // Cargar lista de pacientes
   useEffect(() => {
-    const cargarListaPacientes = async () => {
+    const cargar = async () => {
       try {
-        const lista = await listarPacientes();
+        const lista = await listarPacientes(undefined, true, 1, 100);
         setPacientes(lista);
       } catch (err) {
-        console.error("Error al cargar lista de pacientes:", err);
+        console.error("Error al cargar pacientes:", err);
       }
     };
-    cargarListaPacientes();
+    cargar();
   }, []);
 
+  // Leer parámetros de URL si viene desde el perfil del paciente
+  useEffect(() => {
+    const pId = searchParams.get("pacienteId");
+    if (pId) {
+      setPacienteId(pId);
+    }
+  }, [searchParams]);
+
+  // Paciente seleccionado actual
+  const pacienteSeleccionado = useMemo(() => {
+    return pacientes.find((p) => String(p.id) === String(pacienteId)) || null;
+  }, [pacientes, pacienteId]);
+
+  // Cargar historial de ecografías de la paciente seleccionada
+  const cargarHistorial = useCallback(async (pId: string) => {
+    setCargandoEstudios(true);
+    try {
+      const data = await listarEstudiosEcograficos(pId);
+      setEstudiosPaciente(data);
+    } catch (err) {
+      console.warn("No se pudo cargar historial de ecografías:", err);
+    } finally {
+      setCargandoEstudios(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (pacienteId) {
+      cargarHistorial(pacienteId);
+    } else {
+      setEstudiosPaciente([]);
+    }
+  }, [pacienteId, cargarHistorial]);
+
+  // Manejo de archivos
   const handleFile = (selected: File) => {
+    if (!selected.type.includes("jpeg") && !selected.type.includes("png") && !selected.type.includes("jpg")) {
+      setError("Formato de imagen inválido. Solo se admiten archivos JPG o PNG de ecografía.");
+      return;
+    }
+    if (selected.size > 15 * 1024 * 1024) {
+      setError("La imagen supera los 15MB. Por favor elija un archivo más liviano.");
+      return;
+    }
     setFile(selected);
     setPreviewUrl(URL.createObjectURL(selected));
     setResult(null);
     setError(null);
     setValidationDone(false);
     setValidationLabel(null);
+    setObservacionMedico("");
     setValidationError(null);
   };
 
@@ -98,6 +215,7 @@ const Analysis = () => {
     if (selected) handleFile(selected);
   };
 
+  // Ejecución del análisis con simulación de pasos clínicos
   const handleAnalyze = async () => {
     if (!file || !pacienteId) return;
     setLoading(true);
@@ -106,17 +224,25 @@ const Analysis = () => {
     setValidationDone(false);
     setValidationLabel(null);
     setValidationError(null);
+    setAnalisisPaso(1);
+
+    const stepTimer1 = setTimeout(() => setAnalisisPaso(2), 700);
+    const stepTimer2 = setTimeout(() => setAnalisisPaso(3), 1500);
 
     try {
-      const data = await predecirImagen(file, pacienteId, undefined, "izquierdo");
+      const data = await predecirImagen(file, pacienteId);
       setResult(data);
+      setAnalisisPaso(4);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error al procesar la ecografía médica.");
     } finally {
+      clearTimeout(stepTimer1);
+      clearTimeout(stepTimer2);
       setLoading(false);
     }
   };
 
+  // Validación médica profesional
   const handleValidar = async (etiqueta: "SOP" | "Normal") => {
     if (!result) return;
     setValidating(true);
@@ -131,9 +257,12 @@ const Analysis = () => {
         resultado: result.resultado,
         num_foliculos: result.num_foliculos,
         mapa_calor_url: result.mapa_calor_url,
+        observacion_medico: observacionMedico || undefined,
       });
       setValidationLabel(etiqueta);
       setValidationDone(true);
+      // Recargar historial
+      if (pacienteId) cargarHistorial(pacienteId);
     } catch (err: unknown) {
       setValidationError(err instanceof Error ? err.message : "No se pudo registrar la validación médica.");
     } finally {
@@ -141,148 +270,362 @@ const Analysis = () => {
     }
   };
 
+  // Filtrado de pacientes en combobox
+  const pacientesFiltrados = useMemo(() => {
+    if (!busquedaPaciente) return pacientes.slice(0, 15);
+    const q = busquedaPaciente.toLowerCase();
+    return pacientes.filter(
+      (p) =>
+        p.nombre.toLowerCase().includes(q) ||
+        p.primer_apellido.toLowerCase().includes(q) ||
+        (p.ci && p.ci.toLowerCase().includes(q))
+    ).slice(0, 15);
+  }, [pacientes, busquedaPaciente]);
+
   const cumple = result?.resultado === "Cumple criterio";
   const resultIdText = result?.id ? String(result.id) : null;
-  const pacienteSeleccionado = pacientes.find((p) => p.id === pacienteId);
 
   return (
-    <div className="w-full min-h-[calc(100vh-120px)] bg-slate-50/50 dark:bg-navy-950 p-4 sm:p-6 lg:p-8">
-      <div className="w-full space-y-6">
+    <div className="w-full min-h-[calc(100vh-120px)] p-4 sm:p-6 lg:p-8 space-y-6">
 
-        {/* ── HEADER CLÍNICO ── */}
-        <div className="bg-white dark:bg-navy-800 rounded-3xl border border-slate-200/80 dark:border-navy-700 p-6 sm:p-8 shadow-sm">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div className="flex flex-wrap items-center gap-3 mb-3">
-                <span className="bg-pink-100 dark:bg-pink-900/40 text-pink-700 dark:text-pink-300 text-sm font-bold px-4 py-1 rounded-full uppercase tracking-wider">
-                  Criterio Rotterdam 3
-                </span>
-                <span className="bg-slate-100 dark:bg-navy-700 text-slate-700 dark:text-slate-300 text-xs font-mono font-semibold px-3 py-1 rounded-full border border-slate-200 dark:border-navy-600">
-                  Evaluación Ecográfica Avanzada
-                </span>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                Evaluación de Morfología Ovárica
-              </h1>
-              <p className="text-sm sm:text-base text-slate-500 dark:text-slate-400 mt-1.5 max-w-4xl leading-relaxed">
-                Análisis asistido de ecografía ovárica acoplado a la paciente para cuantificación folicular de Ovario Izquierdo y Derecho.
-              </p>
-            </div>
-            <div className="flex items-center gap-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-2xl px-5 py-3.5 self-start md:self-auto">
-              <span className="relative flex h-3.5 w-3.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500" />
-              </span>
-              <div>
-                <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">Módulo Ecográfico Activo</p>
-                <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Conectado con Pacientes</p>
-              </div>
-            </div>
+      {/* ── HEADER CLÍNICO ── */}
+      <div className="rounded-3xl p-6 sm:p-8 bg-white border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-5">
+        <div>
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span className="bg-rose-100 text-rose-700 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider">
+              Criterio Rotterdam 3
+            </span>
+            <span className="bg-purple-100 text-purple-700 text-xs font-bold px-3 py-1 rounded-full">
+              EfficientNet-B0 + Grad-CAM
+            </span>
+            <span className="bg-slate-100 text-slate-700 text-xs font-mono font-bold px-3 py-1 rounded-full border border-slate-200">
+              Morfología Ovárica
+            </span>
           </div>
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+            Análisis y Evaluación Ecográfica de Ovarios
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-3xl leading-relaxed">
+            Detección automatizada de morfología poliquística ovárica según Criterios de Rotterdam: cuantificación folicular subcapsular, estroma central y mapas de explicabilidad Grad-CAM.
+          </p>
         </div>
 
-        {/* ── SELECCIÓN DE PACIENTE VINCULADA ── */}
-        <div className="bg-white dark:bg-navy-800 rounded-3xl border border-slate-200/80 dark:border-navy-700 p-6 shadow-sm">
-          <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2 mb-2">
-            <MdPerson className="text-brand-500" size={18} />
-            Seleccionar Paciente para la Evaluación Ecográfica *
-          </label>
-          <select
-            value={pacienteId}
-            onChange={(e) => setPacienteId(e.target.value)}
-            className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-sm font-medium text-slate-800 outline-none transition focus:border-brand-500 focus:bg-white dark:border-navy-600 dark:bg-navy-700 dark:text-white"
-          >
-            <option value="">-- Seleccionar Paciente Registrada --</option>
-            {pacientes.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nombre} {p.primer_apellido} ({p.ci || "Sin CI"})
-              </option>
-            ))}
-          </select>
+        <div className="flex items-center gap-3">
           {pacienteSeleccionado && (
-            <p className="mt-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-              ✓ Estudio ecográfico vinculado a: {pacienteSeleccionado.nombre} {pacienteSeleccionado.primer_apellido}
-            </p>
+            <button
+              onClick={() => setTabEstudiosAbierto(!tabEstudiosAbierto)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-extrabold text-slate-700 bg-slate-50 border border-slate-200 hover:bg-slate-100 transition shadow-sm"
+            >
+              <MdHistory size={18} className="text-purple-600" />
+              <span>Historial de Ecografías ({estudiosPaciente.length})</span>
+            </button>
+          )}
+
+          <div className="hidden sm:flex items-center gap-2.5 bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-2.5 text-xs font-extrabold text-emerald-800">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span>IA Diagnóstica Lista</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── PANEL DE VINCULACIÓN DE PACIENTE ── */}
+      <div className="rounded-3xl p-6 bg-white border border-slate-200/80 shadow-sm space-y-4">
+        <div>
+          
+          {/* Selector de Paciente con Búsqueda */}
+          <div className="w-full relative">
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <MdPerson className="text-rose-600" size={17} />
+              <span>Paciente Asignada al Estudio Ecográfico *</span>
+            </label>
+
+            {pacienteSeleccionado ? (
+              <div className="flex items-center justify-between p-3.5 bg-purple-50/60 border border-purple-200 rounded-2xl">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-rose-500 flex items-center justify-center text-white font-black text-sm">
+                    {pacienteSeleccionado.nombre.charAt(0)}{pacienteSeleccionado.primer_apellido.charAt(0)}
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-slate-900 text-sm">
+                      {pacienteSeleccionado.nombre} {pacienteSeleccionado.primer_apellido} {pacienteSeleccionado.segundo_apellido || ""}
+                    </h3>
+                    <p className="text-xs text-slate-500 font-medium">
+                      CI: {pacienteSeleccionado.ci || "Sin CI"} • Edad: {calcularEdad(pacienteSeleccionado.fecha_nacimiento)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/admin/pacientes/${pacienteSeleccionado.id}`)}
+                    className="flex items-center gap-1 text-xs font-bold text-purple-700 hover:text-purple-900 bg-white border border-purple-200 px-3 py-1.5 rounded-xl transition shadow-2xs"
+                    title="Ver expediente clínico completo"
+                  >
+                    <span>Expediente</span>
+                    <MdOpenInNew size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPacienteId("");
+                      setSearchParams({});
+                    }}
+                    className="text-xs font-bold text-slate-500 hover:text-rose-600 bg-white border border-slate-200 px-3 py-1.5 rounded-xl transition shadow-2xs"
+                  >
+                    Cambiar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="relative">
+                <div className="relative">
+                  <MdSearch size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={busquedaPaciente}
+                    onFocus={() => setDropdownPacienteAbierto(true)}
+                    onChange={(e) => {
+                      setBusquedaPaciente(e.target.value);
+                      setDropdownPacienteAbierto(true);
+                    }}
+                    placeholder="Buscar paciente por nombre completo o CI..."
+                    className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-300 text-sm font-semibold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500/30 focus:border-rose-500 transition shadow-sm"
+                  />
+                </div>
+
+                {dropdownPacienteAbierto && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl border border-slate-200 shadow-xl z-30 max-h-60 overflow-y-auto p-1 space-y-1 animate-fade-in-up">
+                    {pacientesFiltrados.length === 0 ? (
+                      <div className="p-4 text-center text-xs font-bold text-slate-400">
+                        No se encontraron pacientes registradas
+                      </div>
+                    ) : (
+                      pacientesFiltrados.map((p) => (
+                        <div
+                          key={p.id}
+                          onClick={() => {
+                            setPacienteId(p.id);
+                            setSearchParams({ pacienteId: p.id });
+                            setDropdownPacienteAbierto(false);
+                            setBusquedaPaciente("");
+                          }}
+                          className="flex items-center justify-between p-2.5 rounded-xl hover:bg-purple-50 cursor-pointer transition text-xs"
+                        >
+                          <div>
+                            <p className="font-extrabold text-slate-900">
+                              {p.nombre} {p.primer_apellido} {p.segundo_apellido || ""}
+                            </p>
+                            <p className="text-slate-500 text-[11px]">
+                              CI: {p.ci || "Sin CI"} • Tel: {p.telefono || "Sin teléfono"}
+                            </p>
+                          </div>
+                          <span className="font-bold text-purple-600 bg-purple-50 px-2.5 py-1 rounded-lg border border-purple-100">
+                            Seleccionar
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+        </div>
+
+        {/* Guía rápida de Rotterdam Criterio 3 */}
+        <div className="flex items-start gap-2.5 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-600 font-medium">
+          <MdInfoOutline className="text-purple-600 flex-shrink-0 mt-0.5" size={17} />
+          <span>
+            <strong>Definición Rotterdam 2003 / 2023:</strong> Presencia de <strong>≥ 12 folículos de 2 a 9 mm</strong> de diámetro en el ovario y/o un volumen ovárico aumentado ({">"} 10 cm³), habitualmente distribuidos en la periferia ovárica con estroma central prominente.
+          </span>
+        </div>
+      </div>
+
+      {/* ── HISTORIAL DE ECOGRAFÍAS DESPLEGABLE ── */}
+      {tabEstudiosAbierto && pacienteSeleccionado && (
+        <div className="rounded-3xl p-6 bg-white border border-slate-200/80 shadow-md space-y-4 animate-fade-in-up">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+              <MdHistory size={20} className="text-purple-600" />
+              <span>Estudios Ecográficos Previos — {pacienteSeleccionado.nombre} {pacienteSeleccionado.primer_apellido}</span>
+            </h3>
+            <button
+              onClick={() => setTabEstudiosAbierto(false)}
+              className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+            >
+              <MdClose size={20} />
+            </button>
+          </div>
+
+          {cargandoEstudios ? (
+            <p className="text-xs text-slate-500 font-bold py-4 text-center">Cargando estudios previos...</p>
+          ) : estudiosPaciente.length === 0 ? (
+            <div className="text-center py-6">
+              <p className="text-xs font-extrabold text-slate-600">No hay ecografías registradas previamente para esta paciente.</p>
+              <p className="text-xs text-slate-400 mt-1">Cargue la primera ecografía en el panel inferior.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {estudiosPaciente.map((est) => (
+                <div
+                  key={est.id}
+                  className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 hover:bg-slate-100/80 transition flex flex-col justify-between space-y-3"
+                >
+                  <div className="flex items-start gap-3">
+                    {est.imagen_url ? (
+                      <img
+                        src={est.imagen_url}
+                        alt="Ecografía"
+                        onClick={() => abrirModalZoom(est.imagen_url)}
+                        className="w-16 h-16 rounded-xl object-cover bg-black cursor-pointer border border-slate-300 hover:opacity-90"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 rounded-xl bg-slate-200 flex items-center justify-center text-slate-400">
+                        <MdLayers size={24} />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
+                          Ecografía Ovárica
+                        </span>
+                        <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                          est.resultado === "Cumple criterio"
+                            ? "bg-rose-100 text-rose-700"
+                            : "bg-emerald-100 text-emerald-700"
+                        }`}>
+                          {est.resultado === "Cumple criterio" ? "SOP" : "Normal"}
+                        </span>
+                      </div>
+                      <p className="text-xs font-bold text-slate-900 mt-1">
+                        {est.num_foliculos} folículos detectados
+                      </p>
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        {formatearFecha(est.created_at)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {est.observacion_medico && (
+                    <p className="text-[11px] text-slate-600 bg-white p-2 rounded-xl border border-slate-200/60 line-clamp-2">
+                      <strong>Nota:</strong> {est.observacion_medico}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
         </div>
+      )}
 
-        {/* ── MENSAJE SI NO HA SELECCIONADO PACIENTE ── */}
-        {!pacienteId ? (
-          <div className="bg-white dark:bg-navy-800 rounded-3xl border border-slate-200/80 dark:border-navy-700 p-12 text-center shadow-sm flex flex-col items-center justify-center min-h-[360px]">
-            <div className="w-20 h-20 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 flex items-center justify-center mb-5 text-amber-500">
-              <MdPerson size={40} />
-            </div>
-            <h3 className="text-xl font-bold text-slate-800 dark:text-white">
-              Selección de Paciente Requerida
-            </h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 max-w-lg leading-relaxed">
-              Por favor, seleccione una paciente registrada en la lista desplegable superior para habilitar el panel de evaluación ecográfica y vincular el estudio a su expediente clínico.
-            </p>
+      {/* ── ÁREA PRINCIPAL: CARGA Y RESULTADOS ── */}
+      {!pacienteId ? (
+        <div className="rounded-3xl border border-slate-200/80 bg-white p-12 text-center shadow-sm flex flex-col items-center justify-center min-h-[380px]">
+          <div className="w-20 h-20 rounded-3xl bg-rose-50 border border-rose-200 flex items-center justify-center mb-4 text-rose-500">
+            <MdPerson size={40} />
           </div>
-        ) : (
-          <div className="w-full space-y-6">
-            {/* ── GRID PRINCIPAL ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* ── PANEL IZQUIERDO: Carga de Imagen (5 COLS) ── */}
-            <div className="lg:col-span-5 space-y-6">
-            <div className="bg-white dark:bg-navy-800 rounded-3xl border border-slate-200/80 dark:border-navy-700 p-6 sm:p-7 shadow-sm">
-              <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <MdUpload className="text-pink-500" size={20} />
-                Imagen Ecográfica de la Paciente
-              </h2>
+          <h2 className="text-xl font-black text-slate-800">
+            Selección de Paciente Requerida
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-500 mt-2 max-w-md leading-relaxed">
+            Para iniciar la evaluación ecográfica del Criterio 3 de Rotterdam, seleccione o busque a una paciente registrada en el recuadro superior.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-              {/* Subida vs Vista Previa limpia */}
+          {/* ── PANEL IZQUIERDO: Carga de Imagen (5 Cols) ── */}
+          <div className="lg:col-span-5 space-y-6">
+            <div className="rounded-3xl p-6 sm:p-7 bg-white border border-slate-200/80 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+                  <MdUpload size={20} className="text-rose-600" />
+                  <span>Carga de Ecografía Ovárica</span>
+                </h3>
+                <span className="text-[11px] font-bold text-rose-600 uppercase bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-100">
+                  Ecografía Ovárica
+                </span>
+              </div>
+
+              {/* Zona de Drop o Preview */}
               {!previewUrl ? (
-                /* Zona de Arrastre cuando NO hay imagen */
                 <label
                   onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                   onDragLeave={() => setDragOver(false)}
                   onDrop={handleDrop}
-                  className={`relative flex flex-col items-center justify-center border-2 border-dashed rounded-2xl p-8 cursor-pointer transition-all min-h-[220px]
-                    ${dragOver
-                      ? "border-pink-500 bg-pink-50/50 dark:bg-pink-900/10"
-                      : "border-slate-200 dark:border-navy-600 hover:border-pink-400 hover:bg-slate-50 dark:hover:bg-navy-700/50"
-                    }`}
+                  className={`relative flex flex-col items-center justify-center border-2 border-dashed rounded-3xl p-8 cursor-pointer transition-all min-h-[260px] ${
+                    dragOver
+                      ? "border-rose-500 bg-rose-50/60"
+                      : "border-slate-300 hover:border-rose-400 hover:bg-slate-50 bg-slate-50/40"
+                  }`}
                 >
-                  <div className="w-16 h-16 rounded-2xl bg-pink-50 dark:bg-pink-900/20 flex items-center justify-center mb-3">
-                    <MdUpload className="text-pink-500" size={32} />
+                  <div className="w-16 h-16 rounded-2xl bg-rose-100 flex items-center justify-center mb-3 text-rose-600">
+                    <MdUpload size={32} />
                   </div>
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 text-center">
-                    Cargar ecografía clínica de la paciente
+                  <p className="text-sm font-extrabold text-slate-800 text-center">
+                    Arrastre la ecografía aquí o haga clic para buscar
                   </p>
-                  <p className="text-xs text-slate-400 mt-1.5 font-medium">
-                    JPG, PNG (Máx. 10MB)
+                  <p className="text-xs text-slate-400 mt-1 font-medium">
+                    Formatos estándar JPG o PNG (Resolución clínica recomendada)
                   </p>
-                  <input type="file" accept="image/jpeg,image/png" onChange={handleImageUpload} className="hidden" />
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/jpg"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                  />
                 </label>
               ) : (
-                /* Vista Previa limpia cuando SÍ hay imagen cargada */
-                <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-navy-700 bg-slate-950 p-4">
-                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
-                    <span className="text-xs font-mono text-slate-300 truncate max-w-[220px]">
-                      {file?.name || "Ecografía Carga"}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFile(null);
-                        setPreviewUrl(null);
-                        setResult(null);
-                      }}
-                      className="flex items-center gap-1.5 text-xs font-bold text-rose-400 hover:text-rose-300 bg-rose-950/60 hover:bg-rose-900 px-3 py-1.5 rounded-xl border border-rose-800/60 transition"
-                    >
-                      <MdDelete size={16} /> Eliminar Imagen
-                    </button>
+                <div className="space-y-3">
+                  <div className="relative rounded-2xl overflow-hidden border border-slate-200 bg-black group">
+                    <img
+                      src={previewUrl}
+                      alt="Ecografía previa"
+                      className="w-full max-h-72 object-contain mx-auto"
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => abrirModalZoom(previewUrl)}
+                        className="px-3.5 py-2 rounded-xl bg-white/90 text-slate-800 font-bold text-xs flex items-center gap-1.5 shadow-lg hover:bg-white"
+                      >
+                        <MdZoomIn size={16} />
+                        <span>Ampliar</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFile(null);
+                          setPreviewUrl(null);
+                          setResult(null);
+                        }}
+                        className="px-3.5 py-2 rounded-xl bg-rose-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg hover:bg-rose-700"
+                      >
+                        <MdDelete size={16} />
+                        <span>Quitar</span>
+                      </button>
+                    </div>
                   </div>
-                  <img src={previewUrl} alt="Ecografía subida" className="max-h-80 w-full object-contain rounded-xl" />
+
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-500 px-1">
+                    <span className="truncate max-w-[200px]">{file?.name}</span>
+                    <span>{file ? `${(file.size / 1024).toFixed(1)} KB` : ""}</span>
+                  </div>
                 </div>
               )}
 
-              {/* Botón Iniciar Evaluación */}
+              {/* Botón de Ejecutar Evaluación */}
               <button
+                type="button"
                 onClick={handleAnalyze}
                 disabled={!file || loading}
-                className="mt-6 w-full flex items-center justify-center gap-2.5 bg-gradient-to-r from-pink-500 via-rose-500 to-purple-600 hover:from-pink-600 hover:via-rose-600 hover:to-purple-700 text-white py-4 px-6 rounded-2xl font-bold text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed"
+                className="w-full py-4 rounded-2xl font-black text-sm text-white flex items-center justify-center gap-2.5 transition-all shadow-md hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{
+                  background: "linear-gradient(135deg, #f43f5e, #a855f7)",
+                  boxShadow: "0 6px 20px rgba(244,63,94,0.3)",
+                }}
               >
                 {loading ? (
                   <>
@@ -290,292 +633,556 @@ const Analysis = () => {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
                     </svg>
-                    <span>Analizando ecografía ovárica...</span>
+                    <span>
+                      {analisisPaso === 1 && "Preprocesando y auto-recortando ecografía..."}
+                      {analisisPaso === 2 && "Evaluando morfología con EfficientNet-B0..."}
+                      {analisisPaso === 3 && "Estimando folículos y Grad-CAM..."}
+                      {analisisPaso >= 4 && "Finalizando diagnóstico..."}
+                    </span>
                   </>
                 ) : (
                   <>
-                    <MdOutlineAnalytics size={20} />
-                    <span>Ejecutar Evaluación Médica</span>
+                    <MdOutlineAnalytics size={22} />
+                    <span>Ejecutar Evaluación Médica IA</span>
                   </>
                 )}
               </button>
 
-              {/* Banner de Error */}
+              {/* Mensaje de Error */}
               {error && (
-                <div className="mt-4 flex items-start gap-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 p-4 rounded-xl">
-                  <MdWarning className="text-rose-500 mt-0.5 flex-shrink-0" size={20} />
-                  <p className="text-xs sm:text-sm text-rose-700 dark:text-rose-300 font-medium">{error}</p>
+                <div className="flex items-start gap-3 p-4 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-semibold text-rose-800">
+                  <MdWarning className="text-rose-600 flex-shrink-0 mt-0.5" size={18} />
+                  <span>{error}</span>
                 </div>
               )}
             </div>
           </div>
 
-          {/* ── PANEL DERECHO: Informe de Resultados (7 COLS) ── */}
+          {/* ── PANEL DERECHO: Resultados Clínicos (7 Cols) ── */}
           <div className="lg:col-span-7 space-y-6">
             {!result ? (
-              <div className="bg-white dark:bg-navy-800 rounded-3xl border border-slate-200/80 dark:border-navy-700 p-8 shadow-sm flex flex-col items-center justify-center text-center min-h-[480px]">
-                <div className="w-20 h-20 rounded-2xl bg-slate-50 dark:bg-navy-900/50 border border-slate-100 dark:border-navy-700 flex items-center justify-center mb-4 text-slate-300 dark:text-navy-600">
-                  <MdCenterFocusStrong size={40} />
+              <div className="rounded-3xl border border-slate-200/80 bg-white p-12 text-center shadow-sm flex flex-col items-center justify-center min-h-[480px]">
+                <div className="w-20 h-20 rounded-3xl bg-slate-100 flex items-center justify-center mb-4 text-slate-400">
+                  <MdCenterFocusStrong size={42} />
                 </div>
-                <h3 className="text-base font-bold text-slate-700 dark:text-slate-200">
-                  Esperando Ecografía para Evaluación
+                <h3 className="font-extrabold text-slate-800 text-base">
+                  Esperando Ecografía para Análisis
                 </h3>
-                <p className="text-xs sm:text-sm text-slate-400 dark:text-slate-500 mt-2 max-w-md leading-relaxed">
-                  Cargue un estudio ecográfico en el panel izquierdo y seleccione <span className="font-semibold text-pink-600">Ejecutar Evaluación Médica</span>.
+                <p className="text-xs text-slate-400 mt-1 max-w-sm leading-relaxed">
+                  Cargue la imagen ecográfica del ovario en el panel izquierdo y presione <strong>"Ejecutar Evaluación Médica IA"</strong> para obtener el diagnóstico Rotterdam.
                 </p>
               </div>
             ) : (
               <>
-                {/* ── Resultado Clínico ── */}
-                <div className={`rounded-3xl border p-7 sm:p-8 shadow-sm ${
+                {/* ── DICTAMEN DIAGNÓSTICO ROTTERDAM ── */}
+                <div className={`rounded-3xl p-6 sm:p-7 border shadow-sm ${
                   cumple
-                    ? "bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50"
-                    : "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50"
+                    ? "bg-rose-50/70 border-rose-200"
+                    : "bg-emerald-50/70 border-emerald-200"
                 }`}>
-                  <div className="flex items-center justify-between gap-2 mb-4">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                      Informe de Evaluación Asistida
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
+                      Dictamen Criterio 3 de Rotterdam
                     </span>
-                    {resultIdText && (
-                      <span className="text-xs font-mono text-slate-400 dark:text-slate-500">
-                        N° Estudio: {resultIdText.slice(0, 8)}
-                      </span>
-                    )}
+                    <span className="text-xs font-mono font-bold text-slate-500 bg-white/70 px-2 py-0.5 rounded-lg border border-slate-200">
+                      Estudio: Ecografía Ovárica
+                    </span>
                   </div>
 
-                  <div className="flex items-start gap-5">
-                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 text-white ${
-                      cumple ? "bg-rose-500" : "bg-emerald-500"
+                  <div className="flex items-start gap-4">
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white flex-shrink-0 shadow-md ${
+                      cumple ? "bg-rose-600" : "bg-emerald-600"
                     }`}>
                       {cumple ? <MdCancel size={32} /> : <MdCheckCircle size={32} />}
                     </div>
                     <div>
-                      <h2 className={`text-2xl sm:text-3xl font-extrabold ${
-                        cumple ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"
+                      <h2 className={`text-xl sm:text-2xl font-black ${
+                        cumple ? "text-rose-700" : "text-emerald-700"
                       }`}>
-                        {cumple ? "Cumple Criterio de Morfología Poliquística (SOP)" : "No Cumple Criterio de Morfología Poliquística"}
+                        {cumple ? "Cumple Criterio de Morfología Poliquística (SOP)" : "No Cumple Criterio Poliquístico (Normal)"}
                       </h2>
-                      <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-1.5 leading-relaxed">
+                      <p className="text-xs text-slate-600 mt-1 leading-relaxed font-medium">
                         {cumple
-                          ? "La ecografía presenta características compatibles con el Criterio 3 de Rotterdam (patrón periférico / folicular aumentado)."
-                          : "La estructura ovárica se encuentra dentro de los límites ecológicos normales."}
+                          ? "La ecografía presenta un patrón estromal y distribución folicular periférica compatible con el Criterio 3 de Rotterdam."
+                          : "La estructura ovárica se encuentra dentro de los límites ecológicos normales, sin proliferación microquística subcapsular."}
                       </p>
                     </div>
                   </div>
 
-                  {/* ── CONTEO TOTAL DE FOLÍCULOS ECOGRÁFICOS ── */}
-                  <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-5 border-t border-slate-200/60 dark:border-navy-700/60">
-                    <div className="bg-pink-50/80 dark:bg-pink-950/30 rounded-2xl p-4.5 border border-pink-200 dark:border-pink-800/50">
-                      <p className="text-xs font-bold uppercase tracking-wider text-pink-700 dark:text-pink-300">Folículos Totales Estimados</p>
-                      <p className="text-3xl font-extrabold text-pink-600 dark:text-pink-400 mt-1">
-                        {result.num_foliculos} <span className="text-xs font-normal text-slate-500">folículos antrales</span>
+                  {/* Tarjetas de Métricas Foliculares */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6 pt-5 border-t border-slate-200">
+                    <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-2xs">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">
+                        Antrales Pequeños (2-9 mm)
+                      </span>
+                      <p className="text-2xl font-black text-slate-900">
+                        {result.foliculos_antrales_pequenos ?? result.num_foliculos}
                       </p>
-                      {cumple ? (
-                        result.num_foliculos >= 12 ? (
-                          <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 mt-1.5 flex items-center gap-1">
-                            ⚠ Patrón SOP (Elevado: ≥ 12 folículos)
-                          </p>
-                        ) : (
-                          <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 mt-1.5 flex items-center gap-1">
-                            ⚠ Morfología SOP por IA (Revisión de folículos recomendada)
-                          </p>
-                        )
-                      ) : (
-                        <p className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 mt-1.5 flex items-center gap-1">
-                          ✓ Normal (Fisiológico: &lt; 12 folículos)
-                        </p>
-                      )}
+                      <span className={`text-[11px] font-bold mt-0.5 block ${
+                        (result.foliculos_antrales_pequenos ?? result.num_foliculos) >= 12
+                          ? "text-rose-600"
+                          : "text-emerald-600"
+                      }`}>
+                        {(result.foliculos_antrales_pequenos ?? result.num_foliculos) >= 12 ? "≥12 (Positivo SOP)" : "Rango Normal"}
+                      </span>
                     </div>
 
-                    <div className="bg-white dark:bg-navy-900/60 rounded-2xl p-4.5 border border-slate-200/60 dark:border-navy-700/50 flex flex-col justify-between">
-                      <div>
-                        <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Umbral Criterio Rotterdam</p>
-                        <p className="text-base font-bold text-slate-800 dark:text-white mt-1">
-                          ≥ 12 folículos <span className="text-xs font-normal text-slate-400">(2-9 mm)</span>
-                        </p>
-                      </div>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight mt-2">
-                        Un ovario sano contiene folículos normales (&lt;12). El SOP se diagnostica por exceso folicular.
+                    <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-2xs">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">
+                        Folículo Dominante (18-24 mm)
+                      </span>
+                      <p className="text-2xl font-black text-slate-900">
+                        {result.foliculos_dominante ?? (cumple ? 0 : 1)}
                       </p>
+                      <span className={`text-[11px] font-bold mt-0.5 block ${cumple ? "text-slate-500" : "text-blue-600"}`}>
+                        {cumple ? "Ausente (Anovulación)" : "Presente (Ovulatorio)"}
+                      </span>
+                    </div>
+
+                    <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-2xs">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">
+                        Patrón Estromal
+                      </span>
+                      <p className="text-xs font-black text-purple-700 mt-2 truncate">
+                        {cumple ? "Collar de Perlas" : "Fisiológico Normal"}
+                      </p>
+                      <span className="text-[10px] text-slate-500 mt-1 block">
+                        {cumple ? "Distribución subcapsular" : "Dispersión uniforme"}
+                      </span>
                     </div>
                   </div>
                 </div>
 
-                {/* ── Probabilidades Estadísticas ── */}
-                <div className="bg-white dark:bg-navy-800 rounded-3xl border border-slate-200/80 dark:border-navy-700 p-7 shadow-sm">
-                  <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-5">
-                    Probabilidad Estimada por Categoría
+                {/* ── PROBABILIDADES ESTIMADAS ── */}
+                <div className="rounded-3xl p-6 bg-white border border-slate-200/80 shadow-sm">
+                  <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider mb-4">
+                    Probabilidad Predictiva de la Red Neuronal
                   </h3>
                   <ProbBar
                     label="Morfología Poliquística Ovárica (SOP)"
                     pct={result.prob_sop_porcentaje ?? (result.prob_sop ? result.prob_sop * 100 : 0)}
-                    barGradient="from-rose-500 to-pink-600"
-                    textColor="text-rose-600 dark:text-rose-400"
+                    barGradient="from-rose-500 to-purple-600"
+                    textColor="text-rose-600"
                   />
                   <ProbBar
-                    label="Morfología Ovárica Normal"
+                    label="Morfología Ovárica Normal / Fisiológica"
                     pct={result.prob_normal_porcentaje ?? (result.prob_normal ? result.prob_normal * 100 : 0)}
-                    barGradient="from-emerald-400 to-emerald-600"
-                    textColor="text-emerald-600 dark:text-emerald-400"
+                    barGradient="from-emerald-400 to-teal-600"
+                    textColor="text-emerald-600"
                   />
                 </div>
               </>
             )}
           </div>
         </div>
+      )}
 
-        {/* ── SECCIÓN INFERIOR DE ANCHO COMPLETO (100% WIDTH - SIN ESPACIO BLANCO EN EL LADO IZQUIERDO) ── */}
-        {result && (
-          <div className="w-full space-y-6 pt-2">
+      {/* ── SECCIÓN DE EXPLICABILIDAD GRAD-CAM Y COMPARADOR ── */}
+      {result && result.mapa_calor_url && (
+        <div className="rounded-3xl p-6 sm:p-8 bg-white border border-slate-200/80 shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <MdLayers className="text-purple-600" size={22} />
+                <h3 className="text-base font-black text-slate-900">
+                  Explicabilidad Visual de IA (Grad-CAM & Delineado Folicular)
+                </h3>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Visualización de zonas de activación de la red neuronal y cápsulas foliculares analizadas.
+              </p>
+            </div>
+
+            {/* Selector de Vista: GradCAM | Original | Doble */}
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setVistaImagen("gradcam")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition ${
+                  vistaImagen === "gradcam" ? "bg-white text-purple-700 shadow-sm" : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Mapa Grad-CAM
+              </button>
+              <button
+                type="button"
+                onClick={() => setVistaImagen("original")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition ${
+                  vistaImagen === "original" ? "bg-white text-purple-700 shadow-sm" : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Ecografía Original
+              </button>
+              <button
+                type="button"
+                onClick={() => setVistaImagen("split")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1 ${
+                  vistaImagen === "split" ? "bg-white text-purple-700 shadow-sm" : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <MdCompare size={14} />
+                <span>Comparación Doble</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
             
-            {/* ── Mapa de Calor Grad-CAM con Guía Clínica Lado a Lado (ANCHO COMPLETO) ── */}
-            {result.mapa_calor_url && (
-              <div className="bg-white dark:bg-navy-800 rounded-3xl border border-slate-200/80 dark:border-navy-700 p-7 shadow-sm space-y-4 w-full">
-                <div className="flex items-center justify-between border-b border-slate-100 dark:border-navy-700/60 pb-3.5">
-                  <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                    <MdLayers className="text-pink-500" size={18} />
-                    Mapa de Atención e Interpretación Visual (Grad-CAM)
-                  </h3>
-                  <span className="text-[11px] font-semibold bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 px-3 py-1 rounded-full">
-                    Explicabilidad IA
-                  </span>
+            {/* Visualizador de Imágenes */}
+            <div className="lg:col-span-7">
+              {vistaImagen === "gradcam" && (
+                <div className="rounded-3xl bg-slate-950 p-4 border border-slate-300 relative group text-center">
+                  <img
+                    src={result.mapa_calor_url}
+                    alt="Mapa de calor Grad-CAM"
+                    className="max-h-96 w-full object-contain rounded-2xl mx-auto"
+                  />
+                  <button
+                    onClick={() => abrirModalZoom(result.mapa_calor_url!)}
+                    className="absolute top-6 right-6 p-2 rounded-xl bg-black/60 text-white hover:bg-black/80 transition shadow-lg"
+                    title="Ampliar en pantalla completa"
+                  >
+                    <MdZoomIn size={20} />
+                  </button>
+                  <p className="text-[11px] font-mono text-slate-400 mt-2">
+                    Superposición Grad-CAM con contornos foliculares dorados
+                  </p>
                 </div>
+              )}
 
-                {/* ESTRUCTURA INTERNA LADO A LADO: IZQUIERDA IMAGEN | DERECHA ETIQUETAS Y GUÍA */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch pt-1">
-                  
-                  {/* ── IZQUIERDA: Imagen del Mapa de Calor (5 COLS) ── */}
-                  <div className="md:col-span-5 flex flex-col justify-center bg-slate-950 rounded-2xl border border-slate-200 dark:border-navy-700 p-4 overflow-hidden shadow-inner min-h-[300px]">
+              {vistaImagen === "original" && (
+                <div className="rounded-3xl bg-slate-950 p-4 border border-slate-300 relative group text-center">
+                  <img
+                    src={result.imagen_url || previewUrl || ""}
+                    alt="Ecografía original"
+                    className="max-h-96 w-full object-contain rounded-2xl mx-auto"
+                  />
+                  <button
+                    onClick={() => abrirModalZoom(result.imagen_url || previewUrl || "")}
+                    className="absolute top-6 right-6 p-2 rounded-xl bg-black/60 text-white hover:bg-black/80 transition shadow-lg"
+                    title="Ampliar en pantalla completa"
+                  >
+                    <MdZoomIn size={20} />
+                  </button>
+                  <p className="text-[11px] font-mono text-slate-400 mt-2">
+                    Ecografía ovárica original en escala de grises
+                  </p>
+                </div>
+              )}
+
+              {vistaImagen === "split" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="rounded-2xl bg-slate-950 p-3 border border-slate-300 text-center">
+                    <img
+                      src={result.imagen_url || previewUrl || ""}
+                      alt="Original"
+                      onClick={() => abrirModalZoom(result.imagen_url || previewUrl || "")}
+                      className="max-h-64 w-full object-contain rounded-xl mx-auto cursor-pointer"
+                    />
+                    <p className="text-[10px] font-mono text-slate-400 mt-1.5">Original</p>
+                  </div>
+                  <div className="rounded-2xl bg-slate-950 p-3 border border-slate-300 text-center">
                     <img
                       src={result.mapa_calor_url}
-                      alt="Mapa de calor de atención en ecografía"
-                      className="max-h-80 w-full object-contain rounded-xl"
+                      alt="Grad-CAM"
+                      onClick={() => abrirModalZoom(result.mapa_calor_url!)}
+                      className="max-h-64 w-full object-contain rounded-xl mx-auto cursor-pointer"
                     />
-                    <p className="text-[11px] text-slate-400 text-center mt-2 font-mono">
-                      Superposición Saliency Map Grad-CAM
+                    <p className="text-[10px] font-mono text-slate-400 mt-1.5">Grad-CAM + Contornos</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Leyenda y Guía de Interpretación */}
+            <div className="lg:col-span-5 space-y-4 bg-slate-50 p-5 sm:p-6 rounded-3xl border border-slate-200">
+              <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                Leyenda Anatómica e Interpretación Clínica
+              </h4>
+
+              <div className="space-y-3">
+                <div className="p-3 bg-white rounded-2xl border border-slate-200 shadow-2xs flex items-start gap-3">
+                  <span className="w-4 h-4 rounded-full bg-rose-500 flex-shrink-0 mt-0.5 shadow-sm" />
+                  <div>
+                    <h5 className="text-xs font-extrabold text-rose-700">Regiones Rojas / Cálidas</h5>
+                    <p className="text-[11px] text-slate-600 mt-0.5 leading-snug">
+                      Foco diagnóstico de la red neuronal en áreas de estroma ovárico hiperdenso y periferia folicular.
                     </p>
                   </div>
+                </div>
 
-                  {/* ── DERECHA: Etiquetas y Guía de Interpretación (7 COLS) ── */}
-                  <div className="md:col-span-7 bg-slate-50 dark:bg-navy-900/60 rounded-2xl p-5 sm:p-6 border border-slate-200/60 dark:border-navy-700/60 flex flex-col justify-between space-y-4">
-                    
-                    {/* Encabezado de la Guía */}
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-pink-100 dark:bg-pink-900/40 text-pink-600 dark:text-pink-300 flex items-center justify-center flex-shrink-0 font-bold text-sm">
-                        💡
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-slate-800 dark:text-white">
-                          Guía de Interpretación para el Especialista
-                        </h4>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                          Muestra las áreas focales donde la red neuronal basó su diagnóstico de la ecografía.
-                        </p>
-                      </div>
-                    </div>
+                <div className="p-3 bg-white rounded-2xl border border-amber-200 shadow-2xs flex items-start gap-3">
+                  <span className="w-4 h-4 rounded-full bg-amber-400 flex-shrink-0 mt-0.5 shadow-sm" />
+                  <div>
+                    <h5 className="text-xs font-extrabold text-amber-700">Contornos Dorados</h5>
+                    <p className="text-[11px] text-slate-600 mt-0.5 leading-snug">
+                      Delineado anatómico de la cápsula folicular (línea granulosa/teca). El interior anecoico (negro) contiene el líquido folicular.
+                    </p>
+                  </div>
+                </div>
 
-                    {/* Tarjetas de Etiquetas de Colores Apiladas */}
-                    <div className="space-y-3">
-                      {/* Zona Roja */}
-                      <div className="bg-white dark:bg-navy-800 p-3.5 rounded-xl border border-slate-200/80 dark:border-navy-700 flex items-start gap-3 shadow-2xs">
-                        <span className="w-3.5 h-3.5 rounded-full bg-rose-500 shadow-sm flex-shrink-0 mt-0.5" />
-                        <div>
-                          <p className="text-xs font-bold text-rose-600 dark:text-rose-400">Zonas Rojas (Alta Atención)</p>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug mt-0.5">
-                            Máximo interés diagnóstico: distribución folicular periférica (patrón en collar de perlas) y estroma denso.
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Zona Amarilla */}
-                      <div className="bg-white dark:bg-navy-800 p-3.5 rounded-xl border border-slate-200/80 dark:border-navy-700 flex items-start gap-3 shadow-2xs">
-                        <span className="w-3.5 h-3.5 rounded-full bg-amber-400 shadow-sm flex-shrink-0 mt-0.5" />
-                        <div>
-                          <p className="text-xs font-bold text-amber-600 dark:text-amber-400">Zonas Amarillas (Media)</p>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug mt-0.5">
-                            Estructuras ecogénicas intermedias o bordes de folículos secundarios analizados.
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Zona Azul */}
-                      <div className="bg-white dark:bg-navy-800 p-3.5 rounded-xl border border-slate-200/80 dark:border-navy-700 flex items-start gap-3 shadow-2xs">
-                        <span className="w-3.5 h-3.5 rounded-full bg-blue-500 shadow-sm flex-shrink-0 mt-0.5" />
-                        <div>
-                          <p className="text-xs font-bold text-blue-600 dark:text-blue-400">Zonas Azules (Baja / Nula)</p>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug mt-0.5">
-                            Fondo ecográfico o parénquima de baja significancia diagnóstica.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
+                <div className="p-3 bg-white rounded-2xl border border-blue-200 shadow-2xs flex items-start gap-3">
+                  <span className="w-4 h-4 rounded-full bg-blue-500 flex-shrink-0 mt-0.5 shadow-sm" />
+                  <div>
+                    <h5 className="text-xs font-extrabold text-blue-700">Regiones Azules / Frías</h5>
+                    <p className="text-[11px] text-slate-600 mt-0.5 leading-snug">
+                      Parénquima ovárico o fondo sin alteraciones patológicas significativas.
+                    </p>
                   </div>
                 </div>
               </div>
-            )}
 
-            {/* ── Validación Médica Real (ANCHO COMPLETO) ── */}
-            <div className="bg-white dark:bg-navy-800 rounded-3xl border border-slate-200/80 dark:border-navy-700 p-7 shadow-sm w-full">
-              <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                Confirmación del Diagnóstico Médico
-              </h3>
-              <p className="text-xs text-slate-400 mb-5">
-                Registre su diagnóstico profesional definitivo para respaldar el registro clínico.
+              <p className="text-[11px] text-slate-500 italic pt-1">
+                * La IA resalta las características visuales; el juicio clínico del especialista prevalece en todo momento.
               </p>
-
-              {validationDone ? (
-                <div className={`flex items-center gap-3 rounded-2xl p-4.5 border ${
-                  validationLabel === "SOP"
-                    ? "bg-rose-50 dark:bg-rose-950/20 border-rose-200 text-rose-700 dark:text-rose-300"
-                    : "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 text-emerald-700 dark:text-emerald-300"
-                }`}>
-                  <MdCheckCircle size={24} className="flex-shrink-0" />
-                  <div>
-                    <p className="text-sm font-bold">
-                      Diagnóstico confirmado: {validationLabel === "SOP" ? "SOP (Cumple criterio)" : "Normal (Sin alteración)"}
-                    </p>
-                    <p className="text-xs opacity-80 mt-0.5">
-                      Su validación profesional fue registrada en el historial clínico.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    onClick={() => handleValidar("SOP")}
-                    disabled={validating || !resultIdText}
-                    className="flex items-center justify-center gap-2 bg-rose-50 dark:bg-rose-950/30 hover:bg-rose-100 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 font-bold text-xs sm:text-sm py-3.5 rounded-2xl transition-all disabled:opacity-40"
-                  >
-                    {validating ? "Registrando..." : "Confirmar Criterio SOP"}
-                  </button>
-                  <button
-                    onClick={() => handleValidar("Normal")}
-                    disabled={validating || !resultIdText}
-                    className="flex items-center justify-center gap-2 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 font-bold text-xs sm:text-sm py-3.5 rounded-2xl transition-all disabled:opacity-40"
-                  >
-                    {validating ? "Registrando..." : "Confirmar Como Normal"}
-                  </button>
-                </div>
-              )}
-
-              {validationError && (
-                <p className="mt-3 text-xs text-rose-500 font-medium">{validationError}</p>
-              )}
             </div>
 
-            {/* Disclaimer Profesional (ANCHO COMPLETO) */}
-            <div className="flex items-start gap-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/50 rounded-2xl p-4 text-xs sm:text-sm text-amber-700 dark:text-amber-400 leading-relaxed w-full">
-              <MdWarning className="text-amber-500 flex-shrink-0 mt-0.5" size={18} />
-              <span>
-                <strong>Nota Médica:</strong> Este sistema constituye una herramienta de apoyo asistencial. Las decisiones clínicas deben basarse en la evaluación integral del especialista.
+          </div>
+        </div>
+      )}
+
+      {/* ── PANEL DE CONFIRMACIÓN MÉDICA DEFINITIVA ── */}
+      {result && (
+        <div className="rounded-3xl p-6 sm:p-7 bg-white border border-slate-200/80 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">
+                Confirmación y Validación por el Especialista
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Valide el resultado para incorporarlo de forma definitiva al expediente clínico y consulta de la paciente.
+              </p>
+            </div>
+            {resultIdText && (
+              <span className="text-xs font-mono text-slate-400 font-bold">
+                ID Estudio: {resultIdText.slice(0, 8)}
               </span>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              Observaciones Clínicas del Especialista (Opcional)
+            </label>
+            <textarea
+              rows={3}
+              value={observacionMedico}
+              onChange={(e) => setObservacionMedico(e.target.value)}
+              disabled={validationDone}
+              placeholder="Ej: Se observa patrón de folículos periféricos subcapsulares con estroma central prominente. Compatible con Criterio 3 de Rotterdam..."
+              className="w-full border border-slate-300 rounded-2xl p-3 text-xs font-semibold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500/30 focus:border-rose-500 transition shadow-sm bg-white disabled:bg-slate-50"
+            />
+          </div>
+
+          {validationDone ? (
+            <div className={`p-4 rounded-2xl border flex items-center gap-3 ${
+              validationLabel === "SOP"
+                ? "bg-rose-50 border-rose-200 text-rose-800"
+                : "bg-emerald-50 border-emerald-200 text-emerald-800"
+            }`}>
+              <MdCheckCircle size={24} className="flex-shrink-0" />
+              <div>
+                <p className="text-sm font-extrabold">
+                  Estudio validado exitosamente como: {validationLabel === "SOP" ? "SOP (Cumple Rotterdam 3)" : "Normal (Sin alteración)"}
+                </p>
+                <p className="text-xs font-medium opacity-90 mt-0.5">
+                  Registrado en el historial clínico de {pacienteSeleccionado?.nombre} {pacienteSeleccionado?.primer_apellido}.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => handleValidar("SOP")}
+                disabled={validating}
+                className="py-3.5 px-4 rounded-2xl font-black text-xs sm:text-sm text-white bg-rose-600 hover:bg-rose-700 transition shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <MdCheck size={18} />
+                <span>Confirmar Dictamen: Cumple Criterio SOP</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleValidar("Normal")}
+                disabled={validating}
+                className="py-3.5 px-4 rounded-2xl font-black text-xs sm:text-sm text-white bg-emerald-600 hover:bg-emerald-700 transition shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <MdCheck size={18} />
+                <span>Confirmar Dictamen: Morfología Normal</span>
+              </button>
+            </div>
+          )}
+
+          {validationError && (
+            <p className="text-xs font-bold text-rose-600">{validationError}</p>
+          )}
+        </div>
+      )}
+
+      {/* ── MODAL DE ZOOM / PANTALLA COMPLETA ── */}
+      {imagenModalZoom && (
+        <div
+          onClick={() => setImagenModalZoom(null)}
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-5 bg-black/90 backdrop-blur-md animate-fade-in"
+        >
+          <div
+            className="relative w-full max-w-6xl h-[90vh] bg-slate-950 rounded-3xl border border-slate-800 shadow-2xl flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header del Visor Clínico */}
+            <div className="flex items-center justify-between px-5 sm:px-7 py-4 border-b border-slate-800/80 bg-slate-900/80 z-20">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-rose-600/20 text-rose-400 flex items-center justify-center border border-rose-500/30">
+                  <MdZoomIn size={22} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                    <span>Visor Ecográfico de Alta Resolución</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                      Ampliación Médica
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    Examine con precisión contornos foliculares subcapsulares, estroma ovárico y ecogenicidad
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <span className="text-xs font-mono font-bold text-slate-200 bg-slate-800/90 px-3 py-1 rounded-xl border border-slate-700 shadow-inner">
+                  {Math.round(zoomNivel * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setImagenModalZoom(null)}
+                  className="p-2 rounded-xl bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white transition shadow-sm"
+                  title="Cerrar visor"
+                >
+                  <MdClose size={22} />
+                </button>
+              </div>
+            </div>
+
+            {/* Viewport Interactivo con Pan y Drag */}
+            <div
+              onMouseDown={(e) => {
+                setIsDragging(true);
+                setDragStart({ x: e.clientX - posicionPan.x, y: e.clientY - posicionPan.y });
+              }}
+              onMouseMove={(e) => {
+                if (!isDragging) return;
+                setPosicionPan({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+              }}
+              onMouseUp={() => setIsDragging(false)}
+              onMouseLeave={() => setIsDragging(false)}
+              onWheel={(e) => {
+                e.preventDefault();
+                if (e.deltaY < 0) {
+                  handleZoomIn();
+                } else {
+                  handleZoomOut();
+                }
+              }}
+              className={`flex-1 flex items-center justify-center overflow-hidden relative select-none ${
+                isDragging ? "cursor-grabbing" : "cursor-grab"
+              }`}
+              style={{
+                backgroundImage: "radial-gradient(#1e293b 1px, transparent 1px)",
+                backgroundSize: "24px 24px",
+              }}
+            >
+              <div
+                style={{
+                  transform: `translate(${posicionPan.x}px, ${posicionPan.y}px) scale(${zoomNivel})`,
+                  transition: isDragging ? "none" : "transform 0.12s ease-out",
+                  transformOrigin: "center center",
+                }}
+                className="flex items-center justify-center p-4"
+              >
+                <img
+                  src={imagenModalZoom}
+                  alt="Ecografía ampliada"
+                  draggable={false}
+                  className="max-h-[72vh] max-w-[85vw] w-auto h-auto min-w-[420px] sm:min-w-[540px] md:min-w-[620px] object-contain rounded-2xl shadow-2xl border border-slate-800 pointer-events-none"
+                  style={{
+                    imageRendering: "auto",
+                    boxShadow: "0 25px 60px -15px rgba(0, 0, 0, 0.9)",
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Barra de Herramientas Inferior */}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 sm:px-7 py-3 border-t border-slate-800/80 bg-slate-900/90 z-20">
+              <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
+                <span className="hidden sm:inline">Rueda del ratón para ampliar · Arrastre con el cursor para explorar cada área.</span>
+                <span className="sm:hidden">Arrastre para explorar.</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleZoomOut}
+                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition font-bold"
+                  title="Reducir zoom (-)"
+                >
+                  <MdZoomOut size={18} />
+                </button>
+
+                <div className="flex items-center gap-1 bg-slate-950 px-2 py-1 rounded-xl border border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => handleResetZoom(1.0)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+                      zoomNivel === 1.0 ? "bg-rose-600 text-white" : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    100%
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleResetZoom(1.8)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+                      zoomNivel === 1.8 ? "bg-rose-600 text-white" : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    180%
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleResetZoom(2.5)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+                      zoomNivel === 2.5 ? "bg-rose-600 text-white" : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    250%
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleZoomIn}
+                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition font-bold"
+                  title="Aumentar zoom (+)"
+                >
+                  <MdZoomIn size={18} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleResetZoom(1.0)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition"
+                  title="Centrar y reajustar"
+                >
+                  <MdRestartAlt size={16} />
+                  <span className="hidden sm:inline">Centrar</span>
+                </button>
+              </div>
             </div>
           </div>
-        )}
-          </div>
-        )}
-      </div>
+        </div>
+      )}
+
     </div>
   );
 };
