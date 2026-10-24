@@ -129,8 +129,23 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
       return;
     }
 
-    if (!newPassword || newPassword.length < 6) {
-      setError("La nueva contraseña debe tener al menos 6 caracteres");
+    if (!newPassword || newPassword.length < 8) {
+      setError("La nueva contraseña debe tener al menos 8 caracteres");
+      return;
+    }
+
+    if (!/[A-Z]/.test(newPassword)) {
+      setError("La contraseña debe contener al menos una letra mayúscula");
+      return;
+    }
+
+    if (!/[a-z]/.test(newPassword)) {
+      setError("La contraseña debe contener al menos una letra minúscula");
+      return;
+    }
+
+    if (!/[0-9\W_]/.test(newPassword)) {
+      setError("La contraseña debe contener al menos un número o símbolo especial");
       return;
     }
 

@@ -73,7 +73,7 @@ const Sidebar = (props: {
           <Links routes={routes} {...({ onClose } as any)} />
         </ul>
 
-        {/* Footer del sidebar con Cierre de Sesión (HU-002) */}
+        {/* Footer del sidebar con Cierre de Sesión */}
         <div className="mx-6 mt-4 space-y-3">
           <button
             type="button"

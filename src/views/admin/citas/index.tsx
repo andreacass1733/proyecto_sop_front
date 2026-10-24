@@ -29,6 +29,100 @@ const meses = [
 
 
 
+export interface TipoCitaVisual {
+  tipo: "medicacion" | "ecografia" | "evaluacion" | "control";
+  etiqueta: string;
+  pillClasses: string;
+  badgeClasses: string;
+  timeBoxClasses: string;
+  borderCard: string;
+  icono: string;
+}
+
+export const obtenerEstiloTipoCita = (motivo?: string): TipoCitaVisual => {
+  const m = (motivo || "").toLowerCase();
+
+  // 1. Citas de Solo Medicación / Farmacología (Verde Esmeralda exclusivo)
+  if (
+    m.includes("medic") ||
+    m.includes("farmac") ||
+    m.includes("recet") ||
+    m.includes("prescrip") ||
+    m.includes("dosis")
+  ) {
+    return {
+      tipo: "medicacion",
+      etiqueta: "Medicación / Farmacología",
+      pillClasses:
+        "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200 border-l-[3px] border-emerald-500 font-semibold",
+      badgeClasses:
+        "text-emerald-800 dark:text-emerald-200 bg-emerald-100 dark:bg-emerald-900/60 border border-emerald-300 dark:border-emerald-700 px-2 py-0.5 rounded-full text-[11px] font-bold",
+      timeBoxClasses:
+        "text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700 font-bold",
+      borderCard: "hover:border-emerald-400 dark:hover:border-emerald-600 border-l-4 border-l-emerald-500",
+      icono: "💊",
+    };
+  }
+
+  // 2. Estudio Ecográfico (Criterio 3 de Rotterdam / Imagenología)
+  if (
+    m.includes("eco") ||
+    m.includes("ultrason") ||
+    m.includes("rotterdam") ||
+    m.includes("ovari") ||
+    m.includes("folic")
+  ) {
+    return {
+      tipo: "ecografia",
+      etiqueta: "Estudio Ecográfico",
+      pillClasses:
+        "bg-pink-50 dark:bg-pink-950/60 text-pink-800 dark:text-pink-200 border-l-[3px] border-pink-500 font-semibold",
+      badgeClasses:
+        "text-pink-800 dark:text-pink-200 bg-pink-100 dark:bg-pink-900/60 border border-pink-300 dark:border-pink-700 px-2 py-0.5 rounded-full text-[11px] font-bold",
+      timeBoxClasses:
+        "text-pink-700 dark:text-pink-300 bg-pink-50 dark:bg-pink-950/60 border border-pink-300 dark:border-pink-700 font-bold",
+      borderCard: "hover:border-pink-400 dark:hover:border-pink-600 border-l-4 border-l-pink-500",
+      icono: "🔬",
+    };
+  }
+
+  // 3. Evaluación Clínica y Hormonal (Criterios 1 y 2)
+  if (
+    m.includes("evalua") ||
+    m.includes("hormon") ||
+    m.includes("lab") ||
+    m.includes("criterio") ||
+    m.includes("perfil")
+  ) {
+    return {
+      tipo: "evaluacion",
+      etiqueta: "Evaluación Clínica / Hormonal",
+      pillClasses:
+        "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-200 border-l-[3px] border-indigo-500 font-semibold",
+      badgeClasses:
+        "text-indigo-800 dark:text-indigo-200 bg-indigo-100 dark:bg-indigo-900/60 border border-indigo-300 dark:border-indigo-700 px-2 py-0.5 rounded-full text-[11px] font-bold",
+      timeBoxClasses:
+        "text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-300 dark:border-indigo-700 font-bold",
+      borderCard: "hover:border-indigo-400 dark:hover:border-indigo-600 border-l-4 border-l-indigo-500",
+      icono: "⚡",
+    };
+  }
+
+  // 4. Control General SOP (Púrpura institucional)
+  return {
+    tipo: "control",
+    etiqueta: "Control General SOP",
+    pillClasses:
+      "bg-purple-50 dark:bg-purple-950/60 text-purple-800 dark:text-purple-200 border-l-[3px] border-purple-500 font-semibold",
+    badgeClasses:
+      "text-purple-800 dark:text-purple-200 bg-purple-100 dark:bg-purple-900/60 border border-purple-300 dark:border-purple-700 px-2 py-0.5 rounded-full text-[11px] font-bold",
+    timeBoxClasses:
+      "text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 border border-purple-300 dark:border-purple-700 font-bold",
+    borderCard: "hover:border-purple-400 dark:hover:border-purple-600 border-l-4 border-l-purple-500",
+    icono: "📋",
+  };
+};
+
 const CitasView: React.FC = () => {
   const navigate = useNavigate();
   const [citas, setCitas] = useState<CitaOut[]>([]);
@@ -64,18 +158,22 @@ const CitasView: React.FC = () => {
     setTimeout(() => setToast(null), 4000);
   };
 
+  // Formateador de fecha local en formato YYYY-MM-DD (independiente de UTC para evitar desfase en Bolivia)
+  const formatLocalDate = (d: Date): string => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
   const isPastDate = (date: Date) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
-    return d < today;
+    const todayStr = formatLocalDate(new Date());
+    const targetStr = formatLocalDate(date);
+    return targetStr < todayStr;
   };
 
   const getTodayFormatted = () => {
-    const now = new Date();
-    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    return now.toISOString().split("T")[0];
+    return formatLocalDate(new Date());
   };
 
   const cargarDatos = async () => {
@@ -105,7 +203,7 @@ const CitasView: React.FC = () => {
     }
 
     const baseDate = fechaPredefinida || new Date();
-    const localDateStr = new Date(baseDate.getTime() - baseDate.getTimezoneOffset() * 60000).toISOString().split("T")[0];
+    const localDateStr = formatLocalDate(baseDate);
     
     setModalFecha(localDateStr);
 
@@ -155,7 +253,7 @@ const CitasView: React.FC = () => {
       return;
     }
 
-    // Validación HU-007: La fecha tentativa de próxima cita debe ser posterior a la fecha de atención
+    // Validación: La fecha tentativa de próxima cita debe ser posterior a la fecha de atención
     if (modalFechaProxima) {
       const fechaProx = new Date(modalFechaProxima + "T23:59:59");
       if (fechaProx.getTime() <= fechaHoraLocal.getTime()) {
@@ -188,11 +286,11 @@ const CitasView: React.FC = () => {
     }
   };
 
-  // HU-008: Actualización inmediata del estado de la cita
+  // Actualización inmediata del estado de la cita médica
   const handleCambiarEstadoCita = async (citaId: string, nuevoEstado: string) => {
     try {
       await actualizarCita(citaId, { estado: nuevoEstado });
-      // Reflejo inmediato en la interfaz sin recargar la página (HU-008)
+      // Reflejo inmediato en la interfaz sin recargar la página
       setCitas((prev) =>
         prev.map((c) => (c.id === citaId ? { ...c, estado: nuevoEstado } : c))
       );
@@ -226,7 +324,7 @@ const CitasView: React.FC = () => {
     return p ? `${p.nombre} ${p.primer_apellido}` : "Paciente registrado";
   };
 
-  // HU-008: Estados disponibles (programada, atendida, cancelada, no asistió)
+  // Estados disponibles (programada, atendida, cancelada, no asistió)
   const renderBadgeEstado = (estado: string) => {
     switch (estado) {
       case "programada":
@@ -292,8 +390,12 @@ const CitasView: React.FC = () => {
   };
 
   const getCitasByDate = (date: Date) => {
-    const target = date.toISOString().split("T")[0];
-    return citasFiltradas.filter(c => c.fecha_atencion && c.fecha_atencion.startsWith(target));
+    const target = formatLocalDate(date);
+    return citasFiltradas.filter(c => {
+      if (!c.fecha_atencion) return false;
+      const citaDate = formatLocalDate(new Date(c.fecha_atencion));
+      return citaDate === target;
+    });
   };
 
   const citasSeleccionadas = selectedDate ? getCitasByDate(selectedDate) : [];
@@ -347,6 +449,29 @@ const CitasView: React.FC = () => {
         </div>
       </Card>
 
+      {/* Barra de Leyenda de Tipos de Cita con Colores Únicos */}
+      <div className="flex flex-wrap items-center gap-2 px-1 py-0.5">
+        <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mr-1">
+          Tipo de Consulta:
+        </span>
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-700 shadow-2xs">
+          <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
+          💊 Solo Medicación
+        </span>
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-purple-50 text-purple-800 border border-purple-300 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-700 shadow-2xs">
+          <span className="h-2 w-2 rounded-full bg-purple-500"></span>
+          📋 Control General SOP
+        </span>
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-800 border border-indigo-300 dark:bg-indigo-950/50 dark:text-indigo-300 dark:border-indigo-700 shadow-2xs">
+          <span className="h-2 w-2 rounded-full bg-indigo-500"></span>
+          ⚡ Evaluación Hormonal
+        </span>
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-pink-50 text-pink-800 border border-pink-300 dark:bg-pink-950/50 dark:text-pink-300 dark:border-pink-700 shadow-2xs">
+          <span className="h-2 w-2 rounded-full bg-pink-500"></span>
+          🔬 Estudio Ecográfico
+        </span>
+      </div>
+
       <div className="flex flex-col xl:flex-row gap-4 flex-1 min-h-0">
         {/* Columna Izquierda: Calendario */}
         <Card extra="p-4 flex-1 h-full flex flex-col">
@@ -379,8 +504,8 @@ const CitasView: React.FC = () => {
             {/* Días del Calendario */}
             {calendarDays.map((d, i) => {
               const isCurrentMonth = d.getMonth() === currentDate.getMonth();
-              const isToday = d.toISOString().split("T")[0] === new Date().toISOString().split("T")[0];
-              const isSelected = selectedDate && d.toISOString().split("T")[0] === selectedDate.toISOString().split("T")[0];
+              const isToday = formatLocalDate(d) === formatLocalDate(new Date());
+              const isSelected = selectedDate && formatLocalDate(d) === formatLocalDate(selectedDate);
               const dayCitas = getCitasByDate(d);
               const pastDay = isPastDate(d);
 
@@ -406,11 +531,21 @@ const CitasView: React.FC = () => {
                   </div>
                   
                   <div className="flex flex-col gap-1 overflow-y-auto overflow-x-hidden" style={{ scrollbarWidth: 'none' }}>
-                    {dayCitas.map((c) => (
-                      <div key={c.id} className="text-[10px] truncate bg-brand-50 dark:bg-navy-700 text-brand-700 dark:text-white px-1 py-0.5 rounded border-l-2 border-brand-500">
-                        <span className="font-semibold">{new Date(c.fecha_atencion!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span> {getNombrePaciente(c.paciente_id).split(" ")[0]}
-                      </div>
-                    ))}
+                    {dayCitas.map((c) => {
+                      const estilo = obtenerEstiloTipoCita(c.motivo);
+                      return (
+                        <div
+                          key={c.id}
+                          title={`${estilo.icono} ${estilo.etiqueta}: ${c.motivo || "Atención médica"}`}
+                          className={`text-[10px] truncate px-1.5 py-0.5 rounded shadow-2xs transition-all ${estilo.pillClasses}`}
+                        >
+                          <span className="font-bold mr-1">
+                            {new Date(c.fecha_atencion!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <span>{estilo.icono} {getNombrePaciente(c.paciente_id).split(" ")[0]}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -452,20 +587,26 @@ const CitasView: React.FC = () => {
               ) : (
                 citasSeleccionadas.sort((a,b) => new Date(a.fecha_atencion!).getTime() - new Date(b.fecha_atencion!).getTime()).map(c => {
                   const isExpanded = citaExpandidaId === c.id;
+                  const estilo = obtenerEstiloTipoCita(c.motivo);
                   return (
-                    <div key={c.id} className="border border-gray-100 dark:border-navy-700 rounded-xl overflow-hidden bg-white dark:bg-navy-800 shadow-sm flex-shrink-0">
+                    <div key={c.id} className={`border border-gray-100 dark:border-navy-700 rounded-xl overflow-hidden bg-white dark:bg-navy-800 shadow-sm flex-shrink-0 transition-colors ${estilo.borderCard}`}>
                       {/* Header de la Cita */}
                       <div 
                         className="p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-navy-700 flex justify-between items-center"
                         onClick={() => setCitaExpandidaId(isExpanded ? null : c.id)}
                       >
                         <div className="flex items-center gap-3">
-                          <div className="font-bold text-brand-500 text-xs w-12 text-center bg-brand-50 dark:bg-navy-900 rounded py-1 border border-brand-100 dark:border-navy-700">
+                          <div className={`text-xs w-14 text-center rounded-lg py-1.5 shrink-0 ${estilo.timeBoxClasses}`}>
                             {new Date(c.fecha_atencion!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </div>
                           <div>
                             <p className="font-bold text-navy-700 dark:text-white text-sm">{getNombrePaciente(c.paciente_id)}</p>
-                            <div className="mt-0.5">{renderBadgeEstado(c.estado)}</div>
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              <span className={estilo.badgeClasses}>
+                                {estilo.icono} {estilo.etiqueta}
+                              </span>
+                              {renderBadgeEstado(c.estado)}
+                            </div>
                           </div>
                         </div>
                         <MdInfoOutline className={`h-5 w-5 text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
@@ -483,7 +624,7 @@ const CitasView: React.FC = () => {
                           <p className="mb-3 text-gray-600 dark:text-gray-300"><strong className="text-navy-700 dark:text-white">Observaciones:</strong> {c.observaciones || "Sin observaciones"}</p>
                           
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-gray-200 dark:border-navy-700">
-                            {/* Selector de Estado Directo (HU-008) */}
+                            {/* Selector de Estado de la Cita */}
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-slate-700 dark:text-slate-300 text-[11px] uppercase tracking-wider">Estado:</span>
                               <select
@@ -654,8 +795,68 @@ const CitasView: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">Motivo de la cita</label>
-                <input type="text" placeholder="Ej: Control SOP" value={motivo} onChange={(e) => setMotivo(e.target.value)} className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 p-2.5 text-sm text-navy-700 outline-none dark:bg-navy-900 dark:border-navy-600 dark:text-white" />
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
+                  Tipo de Consulta y Motivo *
+                </label>
+                {/* Selector rápido temático */}
+                <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <button
+                    type="button"
+                    onClick={() => setMotivo("Prescripción de Medicación SOP")}
+                    className={`p-2.5 rounded-xl text-xs font-bold border transition text-left flex flex-col gap-1 ${
+                      motivo.toLowerCase().includes("medic") || motivo.toLowerCase().includes("farmac")
+                        ? "border-emerald-500 bg-emerald-50 text-emerald-800 shadow-sm dark:bg-emerald-950/60 dark:text-emerald-300"
+                        : "border-gray-200 bg-gray-50 text-gray-600 hover:bg-emerald-50/50 dark:bg-navy-900 dark:border-navy-600 dark:text-gray-300"
+                    }`}
+                  >
+                    <span className="text-base">💊</span>
+                    <span>Solo Medicación</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMotivo("Control General SOP")}
+                    className={`p-2.5 rounded-xl text-xs font-bold border transition text-left flex flex-col gap-1 ${
+                      motivo.toLowerCase().includes("control")
+                        ? "border-purple-500 bg-purple-50 text-purple-800 shadow-sm dark:bg-purple-950/60 dark:text-purple-300"
+                        : "border-gray-200 bg-gray-50 text-gray-600 hover:bg-purple-50/50 dark:bg-navy-900 dark:border-navy-600 dark:text-gray-300"
+                    }`}
+                  >
+                    <span className="text-base">📋</span>
+                    <span>Control General</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMotivo("Evaluación Clínica y Hormonal (Criterios 1-2)")}
+                    className={`p-2.5 rounded-xl text-xs font-bold border transition text-left flex flex-col gap-1 ${
+                      motivo.toLowerCase().includes("evalua") || motivo.toLowerCase().includes("hormon")
+                        ? "border-indigo-500 bg-indigo-50 text-indigo-800 shadow-sm dark:bg-indigo-950/60 dark:text-indigo-300"
+                        : "border-gray-200 bg-gray-50 text-gray-600 hover:bg-indigo-50/50 dark:bg-navy-900 dark:border-navy-600 dark:text-gray-300"
+                    }`}
+                  >
+                    <span className="text-base">⚡</span>
+                    <span>Evaluación Clínica</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMotivo("Estudio Ecográfico (Criterio 3 de Rotterdam)")}
+                    className={`p-2.5 rounded-xl text-xs font-bold border transition text-left flex flex-col gap-1 ${
+                      motivo.toLowerCase().includes("eco") || motivo.toLowerCase().includes("rotterdam")
+                        ? "border-pink-500 bg-pink-50 text-pink-800 shadow-sm dark:bg-pink-950/60 dark:text-pink-300"
+                        : "border-gray-200 bg-gray-50 text-gray-600 hover:bg-pink-50/50 dark:bg-navy-900 dark:border-navy-600 dark:text-gray-300"
+                    }`}
+                  >
+                    <span className="text-base">🔬</span>
+                    <span>Ecografía</span>
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Ej: Prescripción de Medicación SOP / Ajuste de dosis"
+                  value={motivo}
+                  onChange={(e) => setMotivo(e.target.value)}
+                  required
+                  className="mt-2 w-full rounded-xl border border-gray-200 bg-gray-50 p-2.5 text-sm text-navy-700 outline-none dark:bg-navy-900 dark:border-navy-600 dark:text-white"
+                />
               </div>
               <div>
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">Observaciones</label>
