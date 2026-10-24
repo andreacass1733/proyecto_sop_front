@@ -74,7 +74,7 @@ export default function Auth() {
                 Detección y Clasificación del Síndrome de Ovario Poliquístico
               </h2>
               <p className="mt-1.5 text-xs text-rose-100/80 leading-relaxed max-w-md mx-auto">
-                Evaluación integral asistida por Redes Neuronales Convolucionales (EfficientNet-B0) para el análisis folicular y estromal ecográfico.
+                Evaluación integral basada en los Criterios de Rotterdam para el análisis folicular, hormonal y ecográfico.
               </p>
             </div>
           </div>

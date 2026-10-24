@@ -88,6 +88,12 @@ export default function SignIn() {
     if (!password) {
       errores.password = "La contraseña es obligatoria";
       valido = false;
+    } else if (password.trim().length < 6) {
+      errores.password = "La contraseña debe tener al menos 6 caracteres";
+      valido = false;
+    } else if (password.length > 128) {
+      errores.password = "La contraseña excede los 128 caracteres permitidos";
+      valido = false;
     }
 
     setErroresCampos(errores);
@@ -121,11 +127,11 @@ export default function SignIn() {
           navigate("/admin/default", { replace: true });
         }
       } else {
-        // Criterio de Aceptación HU-001: "Correo o contraseña incorrectos" sin indicar cuál falló
-        setErrorGeneral("Correo o contraseña incorrectos");
+        // Mensaje de seguridad o bloqueo por fuerza bruta
+        setErrorGeneral(res.error || "Correo o contraseña incorrectos");
       }
-    } catch {
-      setErrorGeneral("Correo o contraseña incorrectos");
+    } catch (err: any) {
+      setErrorGeneral(err.message || "Correo o contraseña incorrectos");
     } finally {
       setLoading(false);
     }
@@ -151,7 +157,7 @@ export default function SignIn() {
       const res = await verify2Fa(sessionId, cleanCode);
 
       if (res.success) {
-        // Redirigir al dashboard principal tras validación 2FA exitosa (Criterio HU-001)
+        // Redirigir al dashboard principal tras validación 2FA exitosa
         navigate("/admin/default", { replace: true });
       } else {
         setErrorGeneral(res.error || "Código de verificación incorrecto o expirado");
@@ -221,7 +227,7 @@ export default function SignIn() {
             Ingrese sus credenciales registradas. Por seguridad clínica, se despachará un código de verificación directamente a su correo para el Doble Factor (2FA).
           </p>
 
-          {/* Alerta de error (Criterio HU-001: Correo o contraseña incorrectos) */}
+          {/* Alerta de error de credenciales */}
           {errorGeneral && (
             <div className="mb-5 flex items-center gap-2.5 p-3.5 bg-rose-50 dark:bg-rose-900/25 border border-rose-200 dark:border-rose-800/40 rounded-xl text-rose-700 dark:text-rose-300 text-xs font-bold animate-shake">
               <MdErrorOutline size={20} className="flex-shrink-0 text-rose-600 dark:text-rose-400" />

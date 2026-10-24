@@ -142,7 +142,7 @@ const Navbar = (props: {
 
                   <div className="h-px bg-slate-100 dark:bg-navy-700 my-1" />
 
-                  {/* Botón Cerrar sesión en el dropdown con confirmación (HU-002) */}
+                  {/* Botón Cerrar sesión en el dropdown con confirmación */}
                   <button
                     onClick={handleOpenLogout}
                     className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold text-rose-600 hover:text-rose-700 dark:text-rose-400 transition-colors hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
@@ -155,7 +155,7 @@ const Navbar = (props: {
             )}
           </div>
 
-          {/* Botón de Cierre de Sesión Directo en Navbar (Visible en todas las pantallas - HU-002) */}
+          {/* Botón de Cierre de Sesión Directo en Navbar */}
           <button
             onClick={handleOpenLogout}
             title="Cerrar sesión del sistema"
@@ -175,7 +175,7 @@ const Navbar = (props: {
         </div>
       </nav>
 
-      {/* Modal de Confirmación de Cierre de Sesión (HU-002) */}
+      {/* Modal de Confirmación de Cierre de Sesión */}
       <LogoutConfirmationModal
         isOpen={showLogoutModal}
         onClose={() => setShowLogoutModal(false)}

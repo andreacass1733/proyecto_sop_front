@@ -215,7 +215,7 @@ const Analysis = () => {
     if (selected) handleFile(selected);
   };
 
-  // Ejecución del análisis con simulación de pasos clínicos
+  // Ejecución del análisis ecográfico por etapas clínicas
   const handleAnalyze = async () => {
     if (!file || !pacienteId) return;
     setLoading(true);
@@ -288,158 +288,104 @@ const Analysis = () => {
   return (
     <div className="w-full min-h-[calc(100vh-120px)] p-4 sm:p-6 lg:p-8 space-y-6">
 
-      {/* ── HEADER CLÍNICO ── */}
-      <div className="rounded-3xl p-6 sm:p-8 bg-white border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-5">
-        <div>
-          <div className="flex flex-wrap items-center gap-2 mb-2">
-            <span className="bg-rose-100 text-rose-700 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider">
-              Criterio Rotterdam 3
-            </span>
-            <span className="bg-purple-100 text-purple-700 text-xs font-bold px-3 py-1 rounded-full">
-              EfficientNet-B0 + Grad-CAM
-            </span>
-            <span className="bg-slate-100 text-slate-700 text-xs font-mono font-bold px-3 py-1 rounded-full border border-slate-200">
-              Morfología Ovárica
-            </span>
+      {/* ── ENCABEZADO MÉDICO UNIFICADO (ECOGRAFÍA CRITERIO 3) ── */}
+      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3.5">
+        <div className="flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center font-black text-sm shadow-sm flex-shrink-0">
+            {pacienteSeleccionado
+              ? `${pacienteSeleccionado.nombre.charAt(0)}${pacienteSeleccionado.primer_apellido.charAt(0)}`
+              : "EC"}
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-            Análisis y Evaluación Ecográfica de Ovarios
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-3xl leading-relaxed">
-            Detección automatizada de morfología poliquística ovárica según Criterios de Rotterdam: cuantificación folicular subcapsular, estroma central y mapas de explicabilidad Grad-CAM.
-          </p>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700 border border-purple-200">
+                Estudio Ecográfico (Criterio 3)
+              </span>
+              <span className="text-xs text-slate-500 font-medium">
+                Expediente: <strong className="text-slate-800">CI {pacienteSeleccionado?.ci || "Sin CI"}</strong>
+              </span>
+              {pacienteSeleccionado?.fecha_nacimiento && (
+                <span className="text-xs text-slate-500 font-medium">
+                  • Edad: <strong className="text-slate-800">{calcularEdad(pacienteSeleccionado.fecha_nacimiento)}</strong>
+                </span>
+              )}
+            </div>
+            <h2 className="text-base sm:text-lg font-black text-slate-900 mt-0.5">
+              {pacienteSeleccionado
+                ? `${pacienteSeleccionado.nombre} ${pacienteSeleccionado.primer_apellido} ${pacienteSeleccionado.segundo_apellido || ""}`
+                : "Sin paciente seleccionada"}
+            </h2>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
           {pacienteSeleccionado && (
             <button
+              type="button"
               onClick={() => setTabEstudiosAbierto(!tabEstudiosAbierto)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-extrabold text-slate-700 bg-slate-50 border border-slate-200 hover:bg-slate-100 transition shadow-sm"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition border border-slate-200 shadow-sm"
             >
-              <MdHistory size={18} className="text-purple-600" />
-              <span>Historial de Ecografías ({estudiosPaciente.length})</span>
+              <MdHistory size={16} />
+              <span>Historial Ecográfico ({estudiosPaciente.length})</span>
             </button>
           )}
 
-          <div className="hidden sm:flex items-center gap-2.5 bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-2.5 text-xs font-extrabold text-emerald-800">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span>IA Diagnóstica Lista</span>
-          </div>
-        </div>
-      </div>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setDropdownPacienteAbierto(!dropdownPacienteAbierto)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 transition border border-purple-200 shadow-sm"
+            >
+              <MdPerson size={16} />
+              <span>{pacienteSeleccionado ? "Cambiar Paciente" : "Seleccionar Paciente"}</span>
+            </button>
 
-      {/* ── PANEL DE VINCULACIÓN DE PACIENTE ── */}
-      <div className="rounded-3xl p-6 bg-white border border-slate-200/80 shadow-sm space-y-4">
-        <div>
-          
-          {/* Selector de Paciente con Búsqueda */}
-          <div className="w-full relative">
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-              <MdPerson className="text-rose-600" size={17} />
-              <span>Paciente Asignada al Estudio Ecográfico *</span>
-            </label>
-
-            {pacienteSeleccionado ? (
-              <div className="flex items-center justify-between p-3.5 bg-purple-50/60 border border-purple-200 rounded-2xl">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-rose-500 flex items-center justify-center text-white font-black text-sm">
-                    {pacienteSeleccionado.nombre.charAt(0)}{pacienteSeleccionado.primer_apellido.charAt(0)}
-                  </div>
-                  <div>
-                    <h3 className="font-extrabold text-slate-900 text-sm">
-                      {pacienteSeleccionado.nombre} {pacienteSeleccionado.primer_apellido} {pacienteSeleccionado.segundo_apellido || ""}
-                    </h3>
-                    <p className="text-xs text-slate-500 font-medium">
-                      CI: {pacienteSeleccionado.ci || "Sin CI"} • Edad: {calcularEdad(pacienteSeleccionado.fecha_nacimiento)}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/admin/pacientes/${pacienteSeleccionado.id}`)}
-                    className="flex items-center gap-1 text-xs font-bold text-purple-700 hover:text-purple-900 bg-white border border-purple-200 px-3 py-1.5 rounded-xl transition shadow-2xs"
-                    title="Ver expediente clínico completo"
-                  >
-                    <span>Expediente</span>
-                    <MdOpenInNew size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPacienteId("");
-                      setSearchParams({});
-                    }}
-                    className="text-xs font-bold text-slate-500 hover:text-rose-600 bg-white border border-slate-200 px-3 py-1.5 rounded-xl transition shadow-2xs"
-                  >
-                    Cambiar
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="relative">
-                <div className="relative">
-                  <MdSearch size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            {dropdownPacienteAbierto && (
+              <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl border border-slate-200 shadow-xl z-30 max-h-64 overflow-y-auto p-2 space-y-1 animate-fade-in-up">
+                <div className="relative mb-2">
+                  <MdSearch size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="text"
                     value={busquedaPaciente}
-                    onFocus={() => setDropdownPacienteAbierto(true)}
-                    onChange={(e) => {
-                      setBusquedaPaciente(e.target.value);
-                      setDropdownPacienteAbierto(true);
-                    }}
-                    placeholder="Buscar paciente por nombre completo o CI..."
-                    className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-300 text-sm font-semibold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500/30 focus:border-rose-500 transition shadow-sm"
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => setBusquedaPaciente(e.target.value)}
+                    placeholder="Buscar por nombre o CI..."
+                    className="w-full pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs text-slate-800 outline-none focus:border-purple-500"
                   />
                 </div>
-
-                {dropdownPacienteAbierto && (
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl border border-slate-200 shadow-xl z-30 max-h-60 overflow-y-auto p-1 space-y-1 animate-fade-in-up">
-                    {pacientesFiltrados.length === 0 ? (
-                      <div className="p-4 text-center text-xs font-bold text-slate-400">
-                        No se encontraron pacientes registradas
-                      </div>
-                    ) : (
-                      pacientesFiltrados.map((p) => (
-                        <div
-                          key={p.id}
-                          onClick={() => {
-                            setPacienteId(p.id);
-                            setSearchParams({ pacienteId: p.id });
-                            setDropdownPacienteAbierto(false);
-                            setBusquedaPaciente("");
-                          }}
-                          className="flex items-center justify-between p-2.5 rounded-xl hover:bg-purple-50 cursor-pointer transition text-xs"
-                        >
-                          <div>
-                            <p className="font-extrabold text-slate-900">
-                              {p.nombre} {p.primer_apellido} {p.segundo_apellido || ""}
-                            </p>
-                            <p className="text-slate-500 text-[11px]">
-                              CI: {p.ci || "Sin CI"} • Tel: {p.telefono || "Sin teléfono"}
-                            </p>
-                          </div>
-                          <span className="font-bold text-purple-600 bg-purple-50 px-2.5 py-1 rounded-lg border border-purple-100">
-                            Seleccionar
-                          </span>
-                        </div>
-                      ))
-                    )}
+                {pacientesFiltrados.length === 0 ? (
+                  <div className="p-3 text-center text-xs text-slate-400 font-semibold">
+                    No se encontraron pacientes
                   </div>
+                ) : (
+                  pacientesFiltrados.map((p) => (
+                    <div
+                      key={p.id}
+                      onClick={() => {
+                        setPacienteId(p.id);
+                        setSearchParams({ pacienteId: p.id });
+                        setDropdownPacienteAbierto(false);
+                        setBusquedaPaciente("");
+                      }}
+                      className="flex items-center justify-between p-2 rounded-xl hover:bg-purple-50 cursor-pointer transition text-xs"
+                    >
+                      <div>
+                        <p className="font-extrabold text-slate-900">
+                          {p.nombre} {p.primer_apellido}
+                        </p>
+                        <p className="text-slate-500 text-[10px]">
+                          CI: {p.ci || "Sin CI"}
+                        </p>
+                      </div>
+                      <span className="text-[10px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-lg border border-purple-100">
+                        Elegir
+                      </span>
+                    </div>
+                  ))
                 )}
               </div>
             )}
           </div>
-
-        </div>
-
-        {/* Guía rápida de Rotterdam Criterio 3 */}
-        <div className="flex items-start gap-2.5 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-600 font-medium">
-          <MdInfoOutline className="text-purple-600 flex-shrink-0 mt-0.5" size={17} />
-          <span>
-            <strong>Definición Rotterdam 2003 / 2023:</strong> Presencia de <strong>≥ 12 folículos de 2 a 9 mm</strong> de diámetro en el ovario y/o un volumen ovárico aumentado ({">"} 10 cm³), habitualmente distribuidos en la periferia ovárica con estroma central prominente.
-          </span>
         </div>
       </div>
 
@@ -634,25 +580,45 @@ const Analysis = () => {
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
                     </svg>
                     <span>
-                      {analisisPaso === 1 && "Preprocesando y auto-recortando ecografía..."}
-                      {analisisPaso === 2 && "Evaluando morfología con EfficientNet-B0..."}
-                      {analisisPaso === 3 && "Estimando folículos y Grad-CAM..."}
+                      {analisisPaso === 1 && "Preprocesando y ajustando ecografía..."}
+                      {analisisPaso === 2 && "Evaluando morfología ecográfica ovárica..."}
+                      {analisisPaso === 3 && "Estimando recuento folicular y mapa de densidad..."}
                       {analisisPaso >= 4 && "Finalizando diagnóstico..."}
                     </span>
                   </>
                 ) : (
                   <>
                     <MdOutlineAnalytics size={22} />
-                    <span>Ejecutar Evaluación Médica IA</span>
+                    <span>Ejecutar Evaluación Ecográfica</span>
                   </>
                 )}
               </button>
 
-              {/* Mensaje de Error */}
+              {/* Mensaje de Error y Control de Calidad */}
               {error && (
-                <div className="flex items-start gap-3 p-4 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-semibold text-rose-800">
-                  <MdWarning className="text-rose-600 flex-shrink-0 mt-0.5" size={18} />
-                  <span>{error}</span>
+                <div className="p-4 bg-gradient-to-br from-rose-50 to-red-50 border-2 border-rose-300 rounded-2xl shadow-sm text-xs space-y-2.5">
+                  <div className="flex items-center gap-2 text-rose-900 font-extrabold text-sm">
+                    <div className="w-7 h-7 rounded-lg bg-rose-200/80 flex items-center justify-center text-rose-700 flex-shrink-0">
+                      <MdCancel size={18} />
+                    </div>
+                    <span>Control de Calidad: Imagen Rechazada</span>
+                  </div>
+                  
+                  <p className="text-rose-800 font-medium leading-relaxed pl-1">
+                    {error}
+                  </p>
+
+                  <div className="pt-2 border-t border-rose-200/80 text-[11px] text-rose-900/90 space-y-1">
+                    <strong className="font-bold flex items-center gap-1 text-rose-950">
+                      <MdInfoOutline size={14} className="text-rose-600 flex-shrink-0" />
+                      Requisitos para el estudio ecográfico:
+                    </strong>
+                    <ul className="list-disc list-inside space-y-0.5 text-rose-800/90 pl-1">
+                      <li>Ecografía ovárica ginecológica en escala de grises (Modo-B).</li>
+                      <li>Abordaje transvaginal o pélvico con foco en el estroma ovárico.</li>
+                      <li>No se admiten fotos a color, radiografías ni ultrasonidos obstétricos fetales.</li>
+                    </ul>
+                  </div>
                 </div>
               )}
             </div>
@@ -661,17 +627,45 @@ const Analysis = () => {
           {/* ── PANEL DERECHO: Resultados Clínicos (7 Cols) ── */}
           <div className="lg:col-span-7 space-y-6">
             {!result ? (
-              <div className="rounded-3xl border border-slate-200/80 bg-white p-12 text-center shadow-sm flex flex-col items-center justify-center min-h-[480px]">
-                <div className="w-20 h-20 rounded-3xl bg-slate-100 flex items-center justify-center mb-4 text-slate-400">
-                  <MdCenterFocusStrong size={42} />
+              error ? (
+                <div className="rounded-3xl border-2 border-dashed border-rose-200 bg-rose-50/40 p-10 text-center shadow-sm flex flex-col items-center justify-center min-h-[480px]">
+                  <div className="w-20 h-20 rounded-3xl bg-rose-100 text-rose-600 flex items-center justify-center mb-4 shadow-inner">
+                    <MdWarning size={42} />
+                  </div>
+                  <span className="px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-rose-200 text-rose-800 mb-2">
+                    Estudio Bloqueado por Seguridad Médica
+                  </span>
+                  <h3 className="font-extrabold text-slate-800 text-base">
+                    Imagen Médica Fuera de Dominio Ovárico
+                  </h3>
+                  <p className="text-xs text-slate-600 mt-2 max-w-md leading-relaxed">
+                    El sistema de inteligencia artificial ha rechazado la imagen cargada para prevenir clasificaciones falsas y conteos foliculares erróneos en tejidos u objetos no ováricos.
+                  </p>
+                  <div className="mt-6 p-4 max-w-md w-full bg-white rounded-2xl border border-rose-200 text-left shadow-sm">
+                    <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5 mb-2">
+                      <MdCheckCircle className="text-emerald-600" size={16} />
+                      ¿Cómo proceder?
+                    </h4>
+                    <ol className="text-[11px] text-slate-600 space-y-1 list-decimal list-inside leading-relaxed">
+                      <li>Cargue una ecografía ginecológica real del ovario de la paciente.</li>
+                      <li>Asegúrese de que el corte muestre el parénquima ovárico.</li>
+                      <li>Presione nuevamente <strong>"Ejecutar Evaluación Ecográfica"</strong>.</li>
+                    </ol>
+                  </div>
                 </div>
-                <h3 className="font-extrabold text-slate-800 text-base">
-                  Esperando Ecografía para Análisis
-                </h3>
-                <p className="text-xs text-slate-400 mt-1 max-w-sm leading-relaxed">
-                  Cargue la imagen ecográfica del ovario en el panel izquierdo y presione <strong>"Ejecutar Evaluación Médica IA"</strong> para obtener el diagnóstico Rotterdam.
-                </p>
-              </div>
+              ) : (
+                <div className="rounded-3xl border border-slate-200/80 bg-white p-12 text-center shadow-sm flex flex-col items-center justify-center min-h-[480px]">
+                  <div className="w-20 h-20 rounded-3xl bg-slate-100 flex items-center justify-center mb-4 text-slate-400">
+                    <MdCenterFocusStrong size={42} />
+                  </div>
+                  <h3 className="font-extrabold text-slate-800 text-base">
+                    Esperando Ecografía para Análisis
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1 max-w-sm leading-relaxed">
+                    Cargue la imagen ecográfica del ovario en el panel izquierdo y presione <strong>"Ejecutar Evaluación Ecográfica"</strong> para obtener el dictamen según Criterios de Rotterdam.
+                  </p>
+                </div>
+              )
             ) : (
               <>
                 {/* ── DICTAMEN DIAGNÓSTICO ROTTERDAM ── */}
@@ -756,7 +750,7 @@ const Analysis = () => {
                 {/* ── PROBABILIDADES ESTIMADAS ── */}
                 <div className="rounded-3xl p-6 bg-white border border-slate-200/80 shadow-sm">
                   <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider mb-4">
-                    Probabilidad Predictiva de la Red Neuronal
+                    Probabilidad Predictiva Estimada
                   </h3>
                   <ProbBar
                     label="Morfología Poliquística Ovárica (SOP)"
@@ -785,11 +779,11 @@ const Analysis = () => {
               <div className="flex items-center gap-2">
                 <MdLayers className="text-purple-600" size={22} />
                 <h3 className="text-base font-black text-slate-900">
-                  Explicabilidad Visual de IA (Grad-CAM & Delineado Folicular)
+                  Mapeo Anatómico y Delineado Folicular (Grad-CAM)
                 </h3>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Visualización de zonas de activación de la red neuronal y cápsulas foliculares analizadas.
+                Visualización de gradientes de densidad tisular y cápsulas foliculares identificadas.
               </p>
             </div>
 
@@ -906,7 +900,7 @@ const Analysis = () => {
                   <div>
                     <h5 className="text-xs font-extrabold text-rose-700">Regiones Rojas / Cálidas</h5>
                     <p className="text-[11px] text-slate-600 mt-0.5 leading-snug">
-                      Foco diagnóstico de la red neuronal en áreas de estroma ovárico hiperdenso y periferia folicular.
+                      Foco diagnóstico en áreas de estroma ovárico hiperdenso y periferia folicular.
                     </p>
                   </div>
                 </div>
@@ -933,7 +927,7 @@ const Analysis = () => {
               </div>
 
               <p className="text-[11px] text-slate-500 italic pt-1">
-                * La IA resalta las características visuales; el juicio clínico del especialista prevalece en todo momento.
+                * El análisis computarizado resalta las características morfológicas; el criterio clínico del especialista prevalece en todo momento.
               </p>
             </div>
 
