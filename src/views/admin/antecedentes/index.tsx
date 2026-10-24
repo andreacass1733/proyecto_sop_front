@@ -288,54 +288,88 @@ export default function AntecedentesView() {
         )}
       </div>
 
-      {/* BUSCADOR DE PACIENTES */}
-      <div className="bg-white dark:bg-navy-800 rounded-2xl p-6 border border-gray-100 dark:border-navy-700 shadow-sm space-y-3 relative">
-        <label className="block text-xs font-bold uppercase tracking-wider text-navy-700 dark:text-white">
-          Seleccionar o Buscar Paciente *
-        </label>
-        <div className="relative">
-          <MdSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={20} />
-          <input
-            type="text"
-            placeholder="Escriba el nombre, apellido, CI o correo de la paciente..."
-            value={busqueda}
-            onFocus={() => setDropdownAbierto(true)}
-            onChange={e => { setBusqueda(e.target.value); setDropdownAbierto(true); }}
-            className="w-full pl-11 pr-10 py-3 border border-gray-200 dark:border-navy-600 rounded-xl text-sm font-medium text-navy-700 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 bg-white dark:bg-navy-700 focus:outline-none focus:ring-2 focus:ring-brand-500 transition shadow-sm"
-          />
-          {buscando && (
-            <MdRefresh className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-500 animate-spin" size={20} />
-          )}
+      {/* ── SELECTOR DE PACIENTE UNIFICADO (ESTILO EVALUACIÓN CLÍNICA / ROTTERDAM) ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-3xl bg-white dark:bg-navy-800 border border-slate-200/90 dark:border-navy-700 shadow-xs relative">
+        <div className="flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 flex items-center justify-center font-black text-sm shrink-0">
+            {pacienteSeleccionado
+              ? `${pacienteSeleccionado.nombre.charAt(0)}${pacienteSeleccionado.primer_apellido.charAt(0)}`
+              : "ANT"}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-purple-600 dark:text-purple-400">
+                Paciente en Antecedentes:
+              </span>
+              {loadingPaciente && (
+                <span className="text-[10px] font-bold text-indigo-500 animate-pulse">
+                  Cargando antecedentes...
+                </span>
+              )}
+            </div>
+            <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white mt-0.5">
+              {pacienteSeleccionado
+                ? `${pacienteSeleccionado.nombre} ${pacienteSeleccionado.primer_apellido} ${pacienteSeleccionado.segundo_apellido || ""}`
+                : "Ninguna paciente seleccionada"}
+            </h2>
+            {pacienteSeleccionado && (
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                CI: {pacienteSeleccionado.ci || "—"} • Edad: {calcularEdad(pacienteSeleccionado.fecha_nacimiento)}
+              </p>
+            )}
+          </div>
         </div>
 
-        {/* Dropdown de Resultados */}
-        {dropdownAbierto && listaPacientes.length > 0 && (
-          <>
-            <div className="fixed inset-0 z-10" onClick={() => setDropdownAbierto(false)} />
-            <div className="absolute left-6 right-6 top-[88px] z-20 bg-white dark:bg-navy-700 rounded-xl border border-gray-200 dark:border-navy-600 shadow-2xl overflow-hidden max-h-60 overflow-y-auto">
-              {listaPacientes.map((p) => (
-                <div
-                  key={p.id}
-                  onClick={() => seleccionarPaciente(p)}
-                  className="p-3.5 hover:bg-brand-50 dark:hover:bg-navy-600 cursor-pointer border-b border-gray-100 dark:border-navy-600 last:border-0 flex items-center justify-between transition"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-brand-100 dark:bg-brand-900/40 text-brand-600 dark:text-brand-300 font-bold flex items-center justify-center text-xs">
-                      {p.nombre.charAt(0)}{p.primer_apellido.charAt(0)}
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-navy-700 dark:text-white">{p.nombre} {p.primer_apellido} {p.segundo_apellido || ""}</p>
-                      <p className="text-[11px] text-gray-500 dark:text-gray-400">CI: {p.ci || "Sin CI"} • Edad: {calcularEdad(p.fecha_nacimiento)}</p>
-                    </div>
-                  </div>
-                  <span className="text-[11px] font-bold text-brand-500 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/30 px-2.5 py-1 rounded-md">
-                    Seleccionar
-                  </span>
-                </div>
-              ))}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setDropdownAbierto(!dropdownAbierto)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800 transition border border-purple-200 shadow-sm whitespace-nowrap"
+          >
+            <MdPerson size={16} />
+            <span>{pacienteSeleccionado ? "Cambiar Paciente" : "Seleccionar Paciente"}</span>
+          </button>
+
+          {dropdownAbierto && (
+            <div className="absolute right-0 top-full mt-2 w-80 max-h-72 overflow-y-auto bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-2xl shadow-2xl z-50 p-2 space-y-1 animate-fade-in-up">
+              <div className="relative mb-1">
+                <MdSearch className="absolute left-2.5 top-2 text-slate-400" size={16} />
+                <input
+                  type="text"
+                  placeholder="Buscar por nombre, apellido o CI..."
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full text-xs pl-8 pr-3 py-1.5 rounded-xl bg-slate-50 dark:bg-navy-700 border border-slate-200 dark:border-navy-600 outline-none focus:border-purple-500 text-slate-800 dark:text-white"
+                  autoFocus
+                />
+              </div>
+
+              {listaPacientes.length === 0 ? (
+                <p className="text-[11px] text-slate-400 text-center py-3">No se encontraron pacientes</p>
+              ) : (
+                listaPacientes.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => {
+                      seleccionarPaciente(p);
+                      setDropdownAbierto(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
+                      pacienteSeleccionado?.id === p.id
+                        ? "bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300"
+                        : "text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-navy-700"
+                    }`}
+                  >
+                    <span className="truncate">{`${p.nombre} ${p.primer_apellido} ${p.segundo_apellido || ""}`}</span>
+                    <span className="text-[10px] text-slate-400 shrink-0 ml-2">CI: {p.ci || "—"}</span>
+                  </button>
+                ))
+              )}
             </div>
-          </>
-        )}
+          )}
+        </div>
       </div>
 
       {/* SI NO HAY PACIENTE SELECCIONADO */}
@@ -415,7 +449,7 @@ export default function AntecedentesView() {
               </div>
 
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-gray-50 dark:bg-navy-700 p-4 rounded-xl border border-gray-200 dark:border-navy-600">
-                <div>
+                <div className="pl-3 sm:pl-4">
                   <span className="text-xs font-bold text-navy-700 dark:text-white block">
                     ¿La paciente ha iniciado vida sexual? (Sexarca Activa) *
                   </span>

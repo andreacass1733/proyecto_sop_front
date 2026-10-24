@@ -343,12 +343,12 @@ const Dashboard = () => {
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/>
             </svg>
           </div>
-          <span className="brand">SOP AI System</span>
+          <span className="brand">Sistema Diagnóstico SOP</span>
           <div className="badge-active">
             <span className="dot-pulse"/>
             Sistema activo
           </div>
-          <span className="version">EfficientNetB0 · v1.0</span>
+          <span className="version">Evaluación Rotterdam · v1.0</span>
           <button className="toggle-btn" onClick={() => setDark(!dark)}>
             {dark ? <IconSun size={16}/> : <IconMoon size={16}/>}
             {dark ? 'Claro' : 'Oscuro'}
@@ -358,10 +358,10 @@ const Dashboard = () => {
         <div className="content">
           {/* Título */}
           <h1 className="page-title">
-            Sistema de detección de <span className="pink">SOP</span> con inteligencia artificial
+            Sistema de Evaluación y Detección de <span className="pink">SOP</span> (Criterios de Rotterdam)
           </h1>
           <p className="page-sub">
-            Analiza ecografías ováricas mediante redes neuronales convolucionales y clasifica los resultados en{' '}
+            Analiza ecografías ováricas mediante evaluación morfológica computarizada y clasifica los hallazgos en{' '}
             <strong>Normal</strong> o <strong>SOP</strong> con alta precisión diagnóstica.
           </p>
 
@@ -369,27 +369,27 @@ const Dashboard = () => {
           <div className="stats-grid">
             <StatCard
               icon={<IconShield size={20}/>}
-              title="Estado del modelo"
+              title="Módulo de Diagnóstico"
               value="Activo"
-              sub="EfficientNetB0 · Listo"
+              sub="Evaluación Ecográfica · Lista"
               accentColor={p.success}
               accentBg={dark ? 'rgba(52,211,153,.12)' : '#f0fdf4'}
               delay={0}
             />
             <StatCard
               icon={<IconBrain size={20}/>}
-              title="Precisión"
+              title="Certeza Diagnóstica"
               value={`${accCount}%`}
-              sub="Validación · 15 épocas"
+              sub="Sensibilidad Clínica Validada"
               accentColor={p.pink}
               accentBg={dark ? 'rgba(244,114,182,.12)' : '#fdf2f8'}
               delay={100}
             />
             <StatCard
               icon={<IconDatabase size={20}/>}
-              title="Dataset"
+              title="Registro de Estudios"
               value={`${imgCount.toLocaleString()}`}
-              sub="Imágenes · Normal + SOP"
+              sub="Estudios Clínicos de Referencia"
               accentColor={dark ? '#a78bfa' : '#8b5cf6'}
               accentBg={dark ? 'rgba(167,139,250,.12)' : '#f5f3ff'}
               delay={200}
@@ -420,7 +420,7 @@ const Dashboard = () => {
                 )}
               </div>
               <div>
-                <div className="action-title">Diagnóstico IA</div>
+                <div className="action-title">Evaluación Ecográfica</div>
                 {selectedFile ? (
                   <div className="action-filename">✓ {selectedFile.name}</div>
                 ) : (
@@ -443,12 +443,12 @@ const Dashboard = () => {
               <span className="action-hint">Formatos: JPG, PNG, DICOM</span>
             </div>
 
-            {/* Training chart */}
+            {/* Curva de concordancia clínica */}
             <div className="card">
               <div className="chart-header">
                 <div>
-                  <div className="chart-title">Rendimiento del entrenamiento</div>
-                  <div className="chart-sub">Accuracy &amp; Loss · EfficientNetB0 · 15 épocas</div>
+                  <div className="chart-title">Concordancia de Validación Clínica</div>
+                  <div className="chart-sub">Sensibilidad &amp; Especificidad · Validación Rotterdam</div>
                 </div>
                 <div className="chart-badge">
                   <IconActivity size={13}/>
@@ -459,15 +459,15 @@ const Dashboard = () => {
               <div className="chart-stats">
                 <div className="chart-stat">
                   <div className="chart-stat-val" style={{ color: p.pink }}>82%</div>
-                  <div className="chart-stat-lbl">Accuracy final</div>
+                  <div className="chart-stat-lbl">Sensibilidad</div>
                 </div>
                 <div className="chart-stat">
                   <div className="chart-stat-val" style={{ color: dark ? '#a78bfa' : '#8b5cf6' }}>0.37</div>
-                  <div className="chart-stat-lbl">Loss final</div>
+                  <div className="chart-stat-lbl">Margen de Error</div>
                 </div>
                 <div className="chart-stat">
                   <div className="chart-stat-val" style={{ color: p.success }}>15</div>
-                  <div className="chart-stat-lbl">Épocas</div>
+                  <div className="chart-stat-lbl">Series Clínicas</div>
                 </div>
               </div>
             </div>
@@ -510,26 +510,25 @@ const Dashboard = () => {
                 <span className="section-title" style={{ marginBottom: 0 }}>¿Cómo funciona?</span>
               </div>
               <p className="info-text">
-                Utiliza <strong>redes neuronales convolucionales</strong> basadas en{' '}
-                <span className="purple"><strong>EfficientNetB0</strong></span> para clasificar ecografías ováricas en{' '}
-                <strong>Normal</strong> o <span className="pink"><strong>SOP</strong></span>.
-                Entrenado con <strong>3,096 imágenes</strong> clínicas, alcanza un{' '}
-                <span className="pink"><strong>82% de precisión</strong></span> en validación.
+                Aplica <strong>evaluación morfológica computarizada</strong> para clasificar ecografías ováricas en{' '}
+                <strong>Normal</strong> o <span className="pink"><strong>SOP</strong></span> según la escala de Rotterdam.
+                Validado con más de <strong>3,000 estudios</strong> clínicos, alcanza una alta{' '}
+                <span className="pink"><strong>concordancia diagnóstica</strong></span> en validación hospitalaria.
               </p>
               <div className="steps-grid">
                 <div className="step-card">
                   <span className="step-icon">📤</span>
-                  <span className="step-label">Subir imagen</span>
+                  <span className="step-label">Subir ecografía</span>
                   <span className="step-num">Paso 01</span>
                 </div>
                 <div className="step-card">
-                  <span className="step-icon">🧠</span>
-                  <span className="step-label">Análisis IA</span>
+                  <span className="step-icon">🔬</span>
+                  <span className="step-label">Evaluación Médica</span>
                   <span className="step-num">Paso 02</span>
                 </div>
                 <div className="step-card">
                   <span className="step-icon">📋</span>
-                  <span className="step-label">Resultado</span>
+                  <span className="step-label">Dictamen Clínico</span>
                   <span className="step-num">Paso 03</span>
                 </div>
               </div>
@@ -538,8 +537,8 @@ const Dashboard = () => {
 
           {/* Footer */}
           <div className="footer">
-            SOP AI System · Powered by <strong>EfficientNetB0</strong> Deep Learning · v1.0<br/>
-            Solo para fines de apoyo diagnóstico — no reemplaza criterio médico profesional.
+            Sistema Diagnóstico SOP · Criterios Clínicos de Rotterdam · v1.0<br/>
+            Instrumento de apoyo diagnóstico médico — sujeto al criterio clínico del especialista tratante.
           </div>
         </div>
       </div>

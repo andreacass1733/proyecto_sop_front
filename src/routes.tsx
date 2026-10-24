@@ -8,6 +8,8 @@ import DetallePaciente from "views/admin/pacientes/DetallePaciente";
 import CitasView from "views/admin/citas";
 import ConsultasView from "views/admin/consultas";
 import SignIn from "views/auth/SignIn";
+import EvaluacionClinicaView from "views/admin/evaluacion-clinica";
+import AuditoriaLogsView from "views/admin/auditoria";
 
 // Icons
 import {
@@ -19,6 +21,8 @@ import {
   MdAssignment,
   MdCalendarMonth,
   MdFormatListBulleted,
+  MdAutoGraph,
+  MdSecurity,
 } from "react-icons/md";
 
 const routes: RoutesType[] = [
@@ -61,6 +65,22 @@ const routes: RoutesType[] = [
     path: "analysis",
     icon: <MdImageSearch className="h-5 w-5" />,
     component: <Analysis />,
+  },
+  {
+    category: "EVALUACIÓN Y DIAGNÓSTICO",
+    name: "Evaluación Clínica y Hormonal",
+    layout: "/admin",
+    path: "evaluacion-clinica",
+    icon: <MdAutoGraph className="h-5 w-5" />,
+    component: <EvaluacionClinicaView />,
+  },
+  {
+    category: "SEGURIDAD Y CUMPLIMIENTO",
+    name: "Auditoría y Logs",
+    layout: "/admin",
+    path: "auditoria-logs",
+    icon: <MdSecurity className="h-5 w-5" />,
+    component: <AuditoriaLogsView />,
   },
   {
     name: "Expediente de Paciente",

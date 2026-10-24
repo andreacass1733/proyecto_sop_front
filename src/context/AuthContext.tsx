@@ -97,7 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const data: InitialLoginResponse = await iniciarSesion({ email, password, require_2fa });
 
-      // Si es Acceso Rápido Directo (HU-001 Cuadro 3.1): Almacenar sesión inmediatamente
+      // Si es Acceso Rápido Directo: Almacenar sesión inmediatamente
       if (!data.requires_2fa && data.access_token && data.medico) {
         const doctorData: MedicoSession = {
           id: data.medico.id,
