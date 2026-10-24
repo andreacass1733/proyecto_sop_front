@@ -1,4 +1,4 @@
-const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8080";
+const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
 // ════════════════════════════════════════════════════════════════════════════
 // GESTIÓN DE TOKEN JWT Y PETICIONES AUTENTICADAS
@@ -17,18 +17,42 @@ export const removeStoredToken = (): void => {
 };
 
 /**
+ * Cliente HTTP para peticiones públicas sin token con tolerancia de puertos (8000 / 8080).
+ */
+export const publicFetch = async (
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<Response> => {
+  const primaryUrl = endpoint.startsWith("http")
+    ? endpoint
+    : `${BASE_URL}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
+
+  try {
+    return await fetch(primaryUrl, options);
+  } catch (err) {
+    if (!endpoint.startsWith("http")) {
+      const altBase = BASE_URL.includes("8000")
+        ? BASE_URL.replace("8000", "8080")
+        : BASE_URL.replace("8080", "8000");
+      const altUrl = `${altBase}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
+      try {
+        return await fetch(altUrl, options);
+      } catch {
+        throw err;
+      }
+    }
+    throw err;
+  }
+};
+
+/**
  * Cliente HTTP autenticado con inyección automática del token JWT de Supabase Auth
- * en los encabezados HTTP (Authorization: Bearer <token>).
- * Comprueba que el token se envíe en cada petición al backend FastAPI.
+ * en los encabezados HTTP (Authorization: Bearer <token>) y tolerancia de puertos.
  */
 export const authFetch = async (
   endpoint: string,
   options: RequestInit = {}
 ): Promise<Response> => {
-  const url = endpoint.startsWith("http")
-    ? endpoint
-    : `${BASE_URL}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
-
   const token = getStoredToken();
   const headers = new Headers(options.headers || {});
 
@@ -36,10 +60,34 @@ export const authFetch = async (
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  const primaryUrl = endpoint.startsWith("http")
+    ? endpoint
+    : `${BASE_URL}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
+
+  let response: Response;
+  try {
+    response = await fetch(primaryUrl, {
+      ...options,
+      headers,
+    });
+  } catch (err) {
+    if (!endpoint.startsWith("http")) {
+      const altBase = BASE_URL.includes("8000")
+        ? BASE_URL.replace("8000", "8080")
+        : BASE_URL.replace("8080", "8000");
+      const altUrl = `${altBase}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
+      try {
+        response = await fetch(altUrl, {
+          ...options,
+          headers,
+        });
+      } catch {
+        throw err;
+      }
+    } else {
+      throw err;
+    }
+  }
 
   // Si el token expiró o fue revocado en Supabase Auth
   if (response.status === 401) {
@@ -117,7 +165,7 @@ export interface LogoutResponse {
 export const iniciarSesion = async (
   credentials: LoginPayload
 ): Promise<InitialLoginResponse> => {
-  const response = await fetch(`${BASE_URL}/auth/login`, {
+  const response = await publicFetch(`/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(credentials),
@@ -138,7 +186,7 @@ export const iniciarSesion = async (
 export const verificar2FaApi = async (
   payload: Verify2FAPayload
 ): Promise<LoginResponse> => {
-  const response = await fetch(`${BASE_URL}/auth/verify-2fa`, {
+  const response = await publicFetch(`/auth/verify-2fa`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -163,7 +211,7 @@ export const verificar2FaApi = async (
 export const reenviar2FaApi = async (
   session_id: string
 ): Promise<{ session_id: string; codigo_demo?: string; mensaje: string }> => {
-  const response = await fetch(`${BASE_URL}/auth/resend-2fa`, {
+  const response = await publicFetch(`/auth/resend-2fa`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ session_id }),
@@ -183,7 +231,7 @@ export const reenviar2FaApi = async (
 export const solicitarRecuperacionApi = async (
   email: string
 ): Promise<{ session_id: string; email_masked: string; mensaje: string }> => {
-  const response = await fetch(`${BASE_URL}/auth/forgot-password`, {
+  const response = await publicFetch(`/auth/forgot-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email }),
@@ -206,7 +254,7 @@ export const restablecerContrasenaApi = async (payload: {
   code: string;
   session_id?: string;
 }): Promise<{ mensaje: string }> => {
-  const response = await fetch(`${BASE_URL}/auth/reset-password`, {
+  const response = await publicFetch(`/auth/reset-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
