@@ -1150,6 +1150,10 @@ export default function Pacientes() {
         <RotterdamTab
           paciente={pacienteActivo}
           onNavigateToTab={(t) => handleCambiarTab(t)}
+          onSelectPaciente={(p) => {
+            setPacienteSeleccionadoId(p.id);
+            setSearchParams({ tab: "rotterdam", pacienteId: p.id });
+          }}
         />
       )}
 
@@ -1160,6 +1164,10 @@ export default function Pacientes() {
         <TratamientoTab
           paciente={pacienteActivo}
           onNavigateToTab={(t) => handleCambiarTab(t)}
+          onSelectPaciente={(p) => {
+            setPacienteSeleccionadoId(p.id);
+            setSearchParams({ tab: "tratamiento", pacienteId: p.id });
+          }}
         />
       )}
 
