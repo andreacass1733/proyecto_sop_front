@@ -1110,7 +1110,7 @@ export interface ClasificacionRotterdamOut {
   fenotipo: string;
   descripcion: string;
   total_criterios_cumplidos: number;
-  desglose_criterios: Record<string, { cumple: boolean; nombre: string; probabilidad?: number }>;
+  desglose_criterios: Record<string, { cumple: boolean; nombre: string; probabilidad?: number; evaluado?: boolean; estado?: string }>;
   recomendacion_terapeutica?: string;
   nivel_confianza?: string;
 }

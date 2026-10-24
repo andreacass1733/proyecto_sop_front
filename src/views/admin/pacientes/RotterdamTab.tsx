@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   MdCheckCircle,
   MdWarning,
@@ -12,9 +12,12 @@ import {
   MdEditNote,
   MdRefresh,
   MdHistoryEdu,
+  MdPerson,
+  MdSearch,
 } from "react-icons/md";
 import {
   PacienteListItem,
+  listarPacientes,
   obtenerClasificacionPaciente,
   confirmarClasificacionRotterdam,
   ConfirmacionRotterdamOut,
@@ -23,6 +26,7 @@ import {
 interface RotterdamTabProps {
   paciente: PacienteListItem | null;
   onNavigateToTab: (tab: string) => void;
+  onSelectPaciente?: (p: PacienteListItem) => void;
 }
 
 export const FENOTIPOS_ROTTERDAM = {
@@ -77,11 +81,51 @@ function calcularEdad(fechaNacimiento?: string | null): string {
   return `${m < 0 || (m === 0 && hoy.getDate() < nac.getDate()) ? edad - 1 : edad} años`;
 }
 
-export default function RotterdamTab({ paciente, onNavigateToTab }: RotterdamTabProps) {
+export default function RotterdamTab({
+  paciente,
+  onNavigateToTab,
+  onSelectPaciente,
+}: RotterdamTabProps) {
+  // Selector de pacientes
+  const [pacientes, setPacientes] = useState<PacienteListItem[]>([]);
+  const [busquedaPaciente, setBusquedaPaciente] = useState<string>("");
+  const [dropdownPacienteAbierto, setDropdownPacienteAbierto] = useState<boolean>(false);
+  const [pacienteActual, setPacienteActual] = useState<PacienteListItem | null>(paciente);
+
+  useEffect(() => {
+    if (paciente) {
+      setPacienteActual(paciente);
+    }
+  }, [paciente]);
+
+  useEffect(() => {
+    listarPacientes(undefined, true, 1, 100)
+      .then((data) => setPacientes(data))
+      .catch((err) => console.error("Error al cargar pacientes en Rotterdam:", err));
+  }, []);
+
+  const targetPaciente = pacienteActual || paciente;
+
+  const pacientesFiltrados = useMemo(() => {
+    if (!busquedaPaciente.trim()) return pacientes;
+    const q = busquedaPaciente.toLowerCase();
+    return pacientes.filter((p) => {
+      const nombreCompleto = `${p.nombre} ${p.primer_apellido} ${p.segundo_apellido || ""}`.toLowerCase();
+      const ci = (p.ci || "").toLowerCase();
+      return nombreCompleto.includes(q) || ci.includes(q);
+    });
+  }, [pacientes, busquedaPaciente]);
   // Estados de los 3 criterios de Rotterdam para el paciente
   const [criterio1, setCriterio1] = useState<boolean>(true); // Oligo/Anovulación
   const [criterio2, setCriterio2] = useState<boolean>(true); // Hiperandrogenismo
   const [criterio3, setCriterio3] = useState<boolean>(true); // Morfología Ovárica (PCOM)
+
+  // Estados de completitud de evaluación
+  const [evaluadoC1, setEvaluadoC1] = useState<boolean>(true);
+  const [evaluadoC2, setEvaluadoC2] = useState<boolean>(true);
+  const [evaluadoC3, setEvaluadoC3] = useState<boolean>(true);
+  const [, setFenotipoBackend] = useState<string>("Sin SOP");
+  const [descripcionBackend, setDescripcionBackend] = useState<string>("");
 
   const [loading, setLoading] = useState<boolean>(false);
   const [confirmando, setConfirmando] = useState<boolean>(false);
@@ -100,15 +144,21 @@ export default function RotterdamTab({ paciente, onNavigateToTab }: RotterdamTab
   };
 
   // Cargar evaluación real consolidada del paciente desde backend
-  const cargarEvaluacionPaciente = useCallback(async () => {
-    if (!paciente?.id) return;
+  const cargarEvaluacionPaciente = useCallback(async (targetId?: string) => {
+    const pId = targetId || targetPaciente?.id;
+    if (!pId) return;
     setLoading(true);
     try {
-      const res = await obtenerClasificacionPaciente(paciente.id);
+      const res = await obtenerClasificacionPaciente(pId);
       const desglose = res.desglose_criterios || {};
       setCriterio1(Boolean(desglose.criterio_1_disfuncion_ovulatoria?.cumple));
       setCriterio2(Boolean(desglose.criterio_2_hiperandrogenismo?.cumple));
       setCriterio3(Boolean(desglose.criterio_3_ecografico?.cumple));
+      setEvaluadoC1(Boolean(desglose.criterio_1_disfuncion_ovulatoria?.evaluado ?? true));
+      setEvaluadoC2(Boolean(desglose.criterio_2_hiperandrogenismo?.evaluado ?? true));
+      setEvaluadoC3(Boolean(desglose.criterio_3_ecografico?.evaluado ?? true));
+      setFenotipoBackend(res.fenotipo || "Sin SOP");
+      setDescripcionBackend(res.descripcion || "");
       if (res.recomendacion_terapeutica) {
         setConductaTerapeutica(res.recomendacion_terapeutica);
       }
@@ -117,11 +167,24 @@ export default function RotterdamTab({ paciente, onNavigateToTab }: RotterdamTab
     } finally {
       setLoading(false);
     }
-  }, [paciente?.id]);
+  }, [targetPaciente?.id]);
 
   useEffect(() => {
-    cargarEvaluacionPaciente();
-  }, [cargarEvaluacionPaciente]);
+    if (targetPaciente?.id) {
+      cargarEvaluacionPaciente(targetPaciente.id);
+    }
+  }, [targetPaciente?.id, cargarEvaluacionPaciente]);
+
+  const handleElegirPaciente = (p: PacienteListItem) => {
+    setPacienteActual(p);
+    setDiagnosticoOficial(null);
+    setDropdownPacienteAbierto(false);
+    setBusquedaPaciente("");
+    cargarEvaluacionPaciente(p.id);
+    if (onSelectPaciente) {
+      onSelectPaciente(p);
+    }
+  };
 
   // Determinar fenotipo actual según la combinación activa
   const obtenerFenotipo = () => {
@@ -132,19 +195,26 @@ export default function RotterdamTab({ paciente, onNavigateToTab }: RotterdamTab
     return null; // Menos de 2 criterios
   };
 
-  const fenotipoKey = obtenerFenotipo();
-  const fenotipoActual = fenotipoKey ? FENOTIPOS_ROTTERDAM[fenotipoKey] : null;
-  const fenotipoSugeridoNombre = fenotipoActual ? `Fenotipo ${fenotipoKey}` : "Sin SOP";
   const numCriteriosCumplidos = [criterio1, criterio2, criterio3].filter(Boolean).length;
   const diagnosticoPositivo = numCriteriosCumplidos >= 2;
+  const evaluacionIncompleta = !diagnosticoPositivo && (!evaluadoC1 || !evaluadoC2 || !evaluadoC3);
+
+  const fenotipoKey = obtenerFenotipo();
+  const fenotipoActual = fenotipoKey ? FENOTIPOS_ROTTERDAM[fenotipoKey] : null;
+  const fenotipoSugeridoNombre = diagnosticoPositivo
+    ? (fenotipoActual ? `Fenotipo ${fenotipoKey}` : "SOP")
+    : evaluacionIncompleta
+    ? "Evaluación Pendiente"
+    : "Sin SOP";
 
   // Confirmar diagnóstico sugerido con 1 clic (HU-014)
   const handleConfirmarSugerido = async () => {
-    if (!paciente?.id) return;
+    const pId = targetPaciente?.id;
+    if (!pId) return;
     setConfirmando(true);
     try {
       const res = await confirmarClasificacionRotterdam({
-        paciente_id: paciente.id,
+        paciente_id: pId,
         fenotipo_sugerido: fenotipoSugeridoNombre,
         fenotipo_confirmado: fenotipoSugeridoNombre,
         criterio1_cumple: criterio1,
@@ -167,7 +237,8 @@ export default function RotterdamTab({ paciente, onNavigateToTab }: RotterdamTab
   // Rectificar diagnóstico con justificación médica obligatoria (HU-015)
   const handleGuardarRectificado = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!paciente?.id) return;
+    const pId = targetPaciente?.id;
+    if (!pId) return;
     if (!justificacionMedica.trim()) {
       alert("Debe ingresar la justificación clínica obligatoria para rectificar el fenotipo.");
       return;
@@ -176,7 +247,7 @@ export default function RotterdamTab({ paciente, onNavigateToTab }: RotterdamTab
     setConfirmando(true);
     try {
       const res = await confirmarClasificacionRotterdam({
-        paciente_id: paciente.id,
+        paciente_id: pId,
         fenotipo_sugerido: fenotipoSugeridoNombre,
         fenotipo_confirmado: fenotipoRectificado,
         criterio1_cumple: criterio1,
@@ -197,13 +268,14 @@ export default function RotterdamTab({ paciente, onNavigateToTab }: RotterdamTab
     }
   };
 
-  const nombrePaciente = paciente
-    ? `${paciente.nombre} ${paciente.primer_apellido} ${paciente.segundo_apellido || ""}`
+  const nombrePaciente = targetPaciente
+    ? `${targetPaciente.nombre} ${targetPaciente.primer_apellido} ${targetPaciente.segundo_apellido || ""}`
     : "Paciente en Consulta";
-  const iniciales = paciente
-    ? `${paciente.nombre.charAt(0)}${paciente.primer_apellido.charAt(0)}`
+  const iniciales = targetPaciente
+    ? `${targetPaciente.nombre.charAt(0)}${targetPaciente.primer_apellido.charAt(0)}`
     : "RT";
-  const edad = paciente?.fecha_nacimiento ? calcularEdad(paciente.fecha_nacimiento) : null;
+  const edad = targetPaciente?.fecha_nacimiento ? calcularEdad(targetPaciente.fecha_nacimiento) : null;
+  const ciPaciente = targetPaciente?.ci || "—";
 
   return (
     <div className="space-y-6">
@@ -231,7 +303,7 @@ export default function RotterdamTab({ paciente, onNavigateToTab }: RotterdamTab
                 Consenso de Rotterdam (Guía 2023)
               </span>
               <span className="text-xs text-slate-500 font-medium">
-                Expediente: <strong className="text-slate-800">CI {paciente?.ci || "—"}</strong>
+                Expediente: <strong className="text-slate-800">CI {ciPaciente}</strong>
               </span>
               {edad && (
                 <span className="text-xs text-slate-500 font-medium">
@@ -246,10 +318,61 @@ export default function RotterdamTab({ paciente, onNavigateToTab }: RotterdamTab
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Selector de Paciente */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setDropdownPacienteAbierto(!dropdownPacienteAbierto)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 transition border border-purple-200 shadow-sm"
+            >
+              <MdPerson size={16} />
+              <span>{targetPaciente ? "Cambiar Paciente" : "Seleccionar Paciente"}</span>
+            </button>
+
+            {dropdownPacienteAbierto && (
+              <div className="absolute right-0 top-full mt-2 w-80 max-h-72 overflow-y-auto bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 p-2 space-y-1 animate-fade-in-up">
+                <div className="relative mb-1">
+                  <MdSearch className="absolute left-2.5 top-2 text-slate-400" size={16} />
+                  <input
+                    type="text"
+                    placeholder="Buscar paciente por nombre o CI..."
+                    value={busquedaPaciente}
+                    onChange={(e) => setBusquedaPaciente(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-full text-xs pl-8 pr-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 outline-none focus:border-purple-500 text-slate-800"
+                    autoFocus
+                  />
+                </div>
+
+                {pacientesFiltrados.length === 0 ? (
+                  <div className="p-3 text-center text-xs text-slate-400 font-semibold">
+                    No se encontraron pacientes
+                  </div>
+                ) : (
+                  pacientesFiltrados.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => handleElegirPaciente(p)}
+                      className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
+                        targetPaciente?.id === p.id
+                          ? "bg-purple-50 text-purple-700 font-bold"
+                          : "text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      <span className="truncate">{`${p.nombre} ${p.primer_apellido} ${p.segundo_apellido || ""}`}</span>
+                      <span className="text-[10px] text-slate-400 shrink-0 ml-2">CI: {p.ci || "—"}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
           <button
             type="button"
-            onClick={cargarEvaluacionPaciente}
-            disabled={loading}
+            onClick={() => cargarEvaluacionPaciente()}
+            disabled={loading || !targetPaciente?.id}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition border border-slate-200 shadow-sm disabled:opacity-50"
             title="Recargar datos clínicos consolidados"
           >
@@ -261,11 +384,25 @@ export default function RotterdamTab({ paciente, onNavigateToTab }: RotterdamTab
             className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm ${
               diagnosticoPositivo
                 ? "bg-rose-50 text-rose-700 border border-rose-200"
+                : evaluacionIncompleta
+                ? "bg-amber-50 text-amber-700 border border-amber-200"
                 : "bg-emerald-50 text-emerald-700 border border-emerald-200"
             }`}
           >
-            {diagnosticoPositivo ? <MdWarning size={16} className="text-rose-600" /> : <MdCheckCircle size={16} className="text-emerald-600" />}
-            <span>{diagnosticoPositivo ? "DIAGNÓSTICO POSITIVO SOP" : "NO CUMPLE CRITERIOS DE SOP"}</span>
+            {diagnosticoPositivo ? (
+              <MdWarning size={16} className="text-rose-600" />
+            ) : evaluacionIncompleta ? (
+              <MdInfo size={16} className="text-amber-600" />
+            ) : (
+              <MdCheckCircle size={16} className="text-emerald-600" />
+            )}
+            <span>
+              {diagnosticoPositivo
+                ? "DIAGNÓSTICO POSITIVO SOP"
+                : evaluacionIncompleta
+                ? "EVALUACIÓN PENDIENTE"
+                : "NO CUMPLE CRITERIOS DE SOP"}
+            </span>
             <span className="text-[11px] font-bold text-slate-500 ml-1">({numCriteriosCumplidos}/3)</span>
           </span>
 
@@ -307,7 +444,7 @@ export default function RotterdamTab({ paciente, onNavigateToTab }: RotterdamTab
             <button
               type="button"
               onClick={handleConfirmarSugerido}
-              disabled={confirmando || !paciente?.id}
+              disabled={confirmando || !targetPaciente?.id}
               className="flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-xs sm:text-sm bg-emerald-500 hover:bg-emerald-600 text-white transition-all shadow-lg shadow-emerald-500/30 disabled:opacity-50"
             >
               <MdVerified size={18} />
@@ -320,7 +457,7 @@ export default function RotterdamTab({ paciente, onNavigateToTab }: RotterdamTab
                 setFenotipoRectificado(fenotipoSugeridoNombre);
                 setModalRectificarAbierto(true);
               }}
-              disabled={confirmando || !paciente?.id}
+              disabled={confirmando || !targetPaciente?.id}
               className="flex items-center gap-2 px-4 py-3 rounded-2xl font-black text-xs sm:text-sm bg-white/10 hover:bg-white/20 text-purple-200 border border-white/20 transition-all shadow-md disabled:opacity-50"
             >
               <MdEditNote size={18} />
@@ -393,10 +530,14 @@ export default function RotterdamTab({ paciente, onNavigateToTab }: RotterdamTab
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
             <span
               className={`text-[11px] font-black px-2.5 py-0.5 rounded-full ${
-                criterio1 ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-500"
+                criterio1
+                  ? "bg-rose-100 text-rose-700"
+                  : evaluadoC1
+                  ? "bg-slate-100 text-slate-500"
+                  : "bg-amber-100 text-amber-800"
               }`}
             >
-              {criterio1 ? "Criterio Presente" : "No Presente"}
+              {criterio1 ? "Criterio Presente" : evaluadoC1 ? "No Presente" : "Evaluación Pendiente"}
             </span>
             <button
               onClick={() => onNavigateToTab("xgboost")}
@@ -445,10 +586,14 @@ export default function RotterdamTab({ paciente, onNavigateToTab }: RotterdamTab
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
             <span
               className={`text-[11px] font-black px-2.5 py-0.5 rounded-full ${
-                criterio2 ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-500"
+                criterio2
+                  ? "bg-rose-100 text-rose-700"
+                  : evaluadoC2
+                  ? "bg-slate-100 text-slate-500"
+                  : "bg-amber-100 text-amber-800"
               }`}
             >
-              {criterio2 ? "Criterio Presente" : "No Presente"}
+              {criterio2 ? "Criterio Presente" : evaluadoC2 ? "No Presente" : "Evaluación Pendiente"}
             </span>
             <button
               onClick={() => onNavigateToTab("xgboost")}
@@ -497,16 +642,20 @@ export default function RotterdamTab({ paciente, onNavigateToTab }: RotterdamTab
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
             <span
               className={`text-[11px] font-black px-2.5 py-0.5 rounded-full ${
-                criterio3 ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-500"
+                criterio3
+                  ? "bg-rose-100 text-rose-700"
+                  : evaluadoC3
+                  ? "bg-slate-100 text-slate-500"
+                  : "bg-amber-100 text-amber-800"
               }`}
             >
-              {criterio3 ? "Criterio Presente" : "No Presente"}
+              {criterio3 ? "Criterio Presente" : evaluadoC3 ? "No Presente" : "Evaluación Pendiente"}
             </span>
             <button
               onClick={() => onNavigateToTab("ecografia")}
-              className="text-[11px] font-extrabold text-indigo-600 hover:underline flex items-center gap-0.5"
+              className="text-[11px] font-extrabold text-rose-600 hover:underline flex items-center gap-0.5"
             >
-              Ver Análisis Ecográfico →
+              {evaluadoC3 ? "Ver Análisis Ecográfico →" : "Realizar Ecografía Ovárica →"}
             </button>
           </div>
         </div>
@@ -555,12 +704,44 @@ export default function RotterdamTab({ paciente, onNavigateToTab }: RotterdamTab
           </div>
         </div>
       ) : (
-        <div className="p-8 text-center rounded-3xl bg-slate-50 border-2 border-dashed border-slate-300 text-slate-600 space-y-2">
-          <MdInfo className="mx-auto text-slate-400" size={36} />
-          <h4 className="text-sm font-extrabold text-slate-800">Menos de 2 Criterios Presentes</h4>
-          <p className="text-xs text-slate-500 max-w-md mx-auto">
-            Según el Consenso de Rotterdam, se requiere la presencia simultánea de al menos 2 de los 3 criterios para catalogar el cuadro como Síndrome de Ovario Poliquístico.
+        <div className={`p-8 text-center rounded-3xl border-2 border-dashed space-y-3 ${
+          evaluacionIncompleta
+            ? "bg-amber-50/60 border-amber-300 text-amber-900"
+            : "bg-slate-50 border-slate-300 text-slate-600"
+        }`}>
+          <MdInfo className={`mx-auto ${evaluacionIncompleta ? "text-amber-500" : "text-slate-400"}`} size={38} />
+          <h4 className="text-sm font-extrabold">
+            {evaluacionIncompleta
+              ? "Evaluación Incompleta — Faltan Estudios Diagnósticos"
+              : "Evaluación Completa: No Cumple Criterios Diagnósticos"}
+          </h4>
+          <p className="text-xs max-w-lg mx-auto opacity-90 leading-relaxed">
+            {evaluacionIncompleta
+              ? (descripcionBackend || "Existen criterios pendientes de evaluación clínica, hormonal o ecográfica. Complete las pruebas indicadas para consolidar el dictamen definitivo del especialista.")
+              : "Según el Consenso de Rotterdam (2003 / 2023), se requiere la presencia simultánea de al menos 2 de los 3 criterios para catalogar el cuadro como Síndrome de Ovario Poliquístico."}
           </p>
+          {evaluacionIncompleta && (
+            <div className="flex items-center justify-center gap-2 pt-1 flex-wrap">
+              {(!evaluadoC1 || !evaluadoC2) && (
+                <button
+                  type="button"
+                  onClick={() => onNavigateToTab("xgboost")}
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-600 text-white hover:bg-amber-700 transition shadow-sm"
+                >
+                  Completar Criterios 1 y 2 (Clínico / Hormonal) →
+                </button>
+              )}
+              {!evaluadoC3 && (
+                <button
+                  type="button"
+                  onClick={() => onNavigateToTab("ecografia")}
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-purple-600 text-white hover:bg-purple-700 transition shadow-sm"
+                >
+                  Realizar Ecografía Ovárica (Criterio 3) →
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 

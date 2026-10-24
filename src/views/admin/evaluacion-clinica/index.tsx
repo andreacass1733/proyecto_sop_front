@@ -317,8 +317,73 @@ export default function EvaluacionClinicaView() {
 
   // Sincronizar automáticamente datos clínicos y hormonales previos al seleccionar paciente
   useEffect(() => {
+    // 1. Resetear de inmediato evaluación y formularios para evitar mezcla entre pacientes
+    setEvaluacionResultado(null);
+    setHistorialCargado(false);
+
+    const vacioHormonal: DatosHormonalesIn = {
+      fsh: "",
+      lh: "",
+      tsh: "",
+      amh: "",
+      testosterona_total: "",
+      dhea_s: "",
+      androstenediona: "",
+      hidroxiprogesterona_17: "",
+      prolactina: "",
+      progesterona: "",
+      insulina_basal: "",
+      glucosa_basal: "",
+      colesterol_total: "",
+      trigliceridos: "",
+      ldl: "",
+      hdl: "",
+      vldl: "",
+      hemoglobina: "",
+      creatinina: "",
+      transaminasas: "",
+      dia_ciclo_toma: "",
+      unidades_referencia: "",
+    };
+
+    const vacioClinico: DatosClinicosIn = {
+      hirsutismo: false,
+      score_ferriman_gallwey: "",
+      fg_labio_superior: "",
+      fg_menton: "",
+      fg_pecho: "",
+      fg_abdomen_superior: "",
+      fg_abdomen_inferior: "",
+      fg_brazos: "",
+      fg_muslos: "",
+      fg_espalda_superior: "",
+      fg_espalda_lumbar: "",
+      acne_gags_grado: "",
+      alopecia_ludwig_grado: "",
+      acne: false,
+      alopecia_androgenica: false,
+      acantosis_nigricans: false,
+      ciclos_irregulares: false,
+      duracion_ciclo_dias: "",
+      amenorrea: false,
+      oligomenorrea: false,
+      peso_kg: "",
+      talla_cm: "",
+      circunferencia_abdominal_cm: "",
+      cadera_cm: "",
+      ganancia_peso: false,
+      presion_sistolica: "",
+      presion_diastolica: "",
+      frecuencia_cardiaca: "",
+      embarazada: false,
+    };
+
+    setFormHormonal(vacioHormonal);
+    setFormClinico(vacioClinico);
+    setAntecedentesPaciente(null);
+
     if (!pacienteId) {
-      setHistorialCargado(false);
+      setCargandoHistorial(false);
       return;
     }
     let cancel = false;

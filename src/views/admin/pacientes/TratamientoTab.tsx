@@ -11,9 +11,12 @@ import {
   MdCheck,
   MdMedicalServices,
   MdMedication,
+  MdPerson,
+  MdSearch,
 } from "react-icons/md";
 import {
   PacienteListItem,
+  listarPacientes,
   obtenerTratamientoPaciente,
   guardarPlanTratamiento,
   guardarDatosClinicos,
@@ -25,6 +28,7 @@ import {
 interface TratamientoTabProps {
   paciente: PacienteListItem | null;
   onNavigateToTab?: (tab: string) => void;
+  onSelectPaciente?: (p: PacienteListItem) => void;
 }
 
 /**
@@ -214,7 +218,49 @@ function calcularEdad(fechaNacimiento?: string | null): string {
   return `${m < 0 || (m === 0 && hoy.getDate() < nac.getDate()) ? edad - 1 : edad} años`;
 }
 
-export default function TratamientoTab({ paciente }: TratamientoTabProps) {
+export default function TratamientoTab({
+  paciente,
+  onNavigateToTab,
+  onSelectPaciente,
+}: TratamientoTabProps) {
+  // Selector de pacientes
+  const [pacientes, setPacientes] = useState<PacienteListItem[]>([]);
+  const [busquedaPaciente, setBusquedaPaciente] = useState<string>("");
+  const [dropdownPacienteAbierto, setDropdownPacienteAbierto] = useState<boolean>(false);
+  const [pacienteActual, setPacienteActual] = useState<PacienteListItem | null>(paciente);
+
+  useEffect(() => {
+    if (paciente) {
+      setPacienteActual(paciente);
+    }
+  }, [paciente]);
+
+  useEffect(() => {
+    listarPacientes(undefined, true, 1, 100)
+      .then((data) => setPacientes(data))
+      .catch((err) => console.error("Error al cargar pacientes en Tratamiento:", err));
+  }, []);
+
+  const targetPaciente = pacienteActual || paciente;
+
+  const pacientesFiltrados = useMemo(() => {
+    if (!busquedaPaciente.trim()) return pacientes;
+    const q = busquedaPaciente.toLowerCase();
+    return pacientes.filter((p) => {
+      const nombreCompleto = `${p.nombre} ${p.primer_apellido} ${p.segundo_apellido || ""}`.toLowerCase();
+      const ci = (p.ci || "").toLowerCase();
+      return nombreCompleto.includes(q) || ci.includes(q);
+    });
+  }, [pacientes, busquedaPaciente]);
+
+  const handleElegirPaciente = (p: PacienteListItem) => {
+    setPacienteActual(p);
+    setDropdownPacienteAbierto(false);
+    setBusquedaPaciente("");
+    if (onSelectPaciente) {
+      onSelectPaciente(p);
+    }
+  };
   const fechaHoy = formatLocalDate(new Date());
   const fechaFinSem24 = calcularFechaFinPorMeses(fechaHoy, 6);
 
@@ -227,7 +273,7 @@ export default function TratamientoTab({ paciente }: TratamientoTabProps) {
 
   // ── ESTADO TABLA TRATAMIENTO ───────────────────────────────────────────────
   const [tratamientoPlan, setTratamientoPlan] = useState<TratamientoPlan>({
-    paciente_id: paciente?.id || "",
+    paciente_id: targetPaciente?.id || "",
     tipo: "Combinado (Farmacológico y Estilo de Vida)",
     objetivo: "Regulación ovulatoria y control hiperandrogénico",
     duracion_semanas: 24,
@@ -271,11 +317,11 @@ export default function TratamientoTab({ paciente }: TratamientoTabProps) {
 
   // Cargar plan, medicamentos y signos vitales reales desde Supabase
   useEffect(() => {
-    if (!paciente?.id) return;
+    if (!targetPaciente?.id) return;
     setCargandoTratamiento(true);
 
     // Cargar tratamiento y medicamentos
-    obtenerTratamientoPaciente(paciente.id)
+    obtenerTratamientoPaciente(targetPaciente.id)
       .then((data) => {
         if (data) {
           setTratamientoPlan({
@@ -293,6 +339,8 @@ export default function TratamientoTab({ paciente }: TratamientoTabProps) {
           } else {
             setMedicaciones([]);
           }
+        } else {
+          setMedicaciones([]);
         }
       })
       .catch((err) => {
@@ -303,7 +351,7 @@ export default function TratamientoTab({ paciente }: TratamientoTabProps) {
       });
 
     // Cargar últimos signos vitales registrados
-    obtenerUltimosDatosClinicosPaciente(paciente.id)
+    obtenerUltimosDatosClinicosPaciente(targetPaciente.id)
       .then((dc) => {
         if (dc) {
           setVitals({
@@ -326,7 +374,7 @@ export default function TratamientoTab({ paciente }: TratamientoTabProps) {
         }
       })
       .catch((e) => console.warn("No se pudieron cargar signos vitales previos:", e));
-  }, [paciente?.id]);
+  }, [targetPaciente?.id]);
 
   // Modal para prescribir nuevo medicamento (sin campos duplicados)
   const [modalNuevoMedicamento, setModalNuevoMedicamento] = useState(false);
@@ -443,7 +491,7 @@ export default function TratamientoTab({ paciente }: TratamientoTabProps) {
   };
 
   const handleGuardarPlanCompleto = async () => {
-    if (!paciente?.id) {
+    if (!targetPaciente?.id) {
       showToast("Seleccione un paciente para guardar el plan.", "error");
       return;
     }
@@ -459,7 +507,7 @@ export default function TratamientoTab({ paciente }: TratamientoTabProps) {
       if (pNum !== undefined || tNum !== undefined || fcNum !== undefined || psNum !== undefined) {
         try {
           await guardarDatosClinicos({
-            paciente_id: paciente.id,
+            paciente_id: targetPaciente.id,
             peso_kg: pNum,
             talla_cm: tNum,
             imc: imcCalculado !== null ? imcCalculado : undefined,
@@ -475,7 +523,7 @@ export default function TratamientoTab({ paciente }: TratamientoTabProps) {
 
       // 2. Guardar el Plan de Tratamiento y Prescripciones Farmacológicas (vinculando la cita médica)
       const payload: PlanTratamientoIn = {
-        paciente_id: paciente.id,
+        paciente_id: targetPaciente.id,
         tipo: tratamientoPlan.tipo,
         duracion_semanas: tratamientoPlan.duracion_semanas,
         objetivo: tratamientoPlan.objetivo,
@@ -512,14 +560,14 @@ export default function TratamientoTab({ paciente }: TratamientoTabProps) {
     }
   };
 
-  const nombrePaciente = paciente
-    ? `${paciente.nombre} ${paciente.primer_apellido} ${paciente.segundo_apellido || ""}`
+  const nombrePaciente = targetPaciente
+    ? `${targetPaciente.nombre} ${targetPaciente.primer_apellido} ${targetPaciente.segundo_apellido || ""}`
     : "Paciente en Consulta";
-  const ciPaciente = paciente?.ci || "—";
-  const iniciales = paciente
-    ? `${paciente.nombre.charAt(0)}${paciente.primer_apellido.charAt(0)}`
+  const ciPaciente = targetPaciente?.ci || "—";
+  const iniciales = targetPaciente
+    ? `${targetPaciente.nombre.charAt(0)}${targetPaciente.primer_apellido.charAt(0)}`
     : "TR";
-  const edad = paciente?.fecha_nacimiento ? calcularEdad(paciente.fecha_nacimiento) : null;
+  const edad = targetPaciente?.fecha_nacimiento ? calcularEdad(targetPaciente.fecha_nacimiento) : null;
 
   return (
     <div className="space-y-5">
@@ -562,6 +610,57 @@ export default function TratamientoTab({ paciente }: TratamientoTabProps) {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Selector de Paciente */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setDropdownPacienteAbierto(!dropdownPacienteAbierto)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 transition border border-purple-200 shadow-sm"
+            >
+              <MdPerson size={16} />
+              <span>{targetPaciente ? "Cambiar Paciente" : "Seleccionar Paciente"}</span>
+            </button>
+
+            {dropdownPacienteAbierto && (
+              <div className="absolute right-0 top-full mt-2 w-80 max-h-72 overflow-y-auto bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 p-2 space-y-1 animate-fade-in-up">
+                <div className="relative mb-1">
+                  <MdSearch className="absolute left-2.5 top-2 text-slate-400" size={16} />
+                  <input
+                    type="text"
+                    placeholder="Buscar paciente por nombre o CI..."
+                    value={busquedaPaciente}
+                    onChange={(e) => setBusquedaPaciente(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-full text-xs pl-8 pr-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 outline-none focus:border-purple-500 text-slate-800"
+                    autoFocus
+                  />
+                </div>
+
+                {pacientesFiltrados.length === 0 ? (
+                  <div className="p-3 text-center text-xs text-slate-400 font-semibold">
+                    No se encontraron pacientes
+                  </div>
+                ) : (
+                  pacientesFiltrados.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => handleElegirPaciente(p)}
+                      className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
+                        targetPaciente?.id === p.id
+                          ? "bg-purple-50 text-purple-700 font-bold"
+                          : "text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      <span className="truncate">{`${p.nombre} ${p.primer_apellido} ${p.segundo_apellido || ""}`}</span>
+                      <span className="text-[10px] text-slate-400 shrink-0 ml-2">CI: {p.ci || "—"}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
           <button
             type="button"
             onClick={() => setModalRecetaImprimir(true)}
