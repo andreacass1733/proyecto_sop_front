@@ -1124,11 +1124,20 @@ export interface OrdenMedicaOut {
 export const emitirOrdenMedica = async (orden: OrdenMedicaCreate): Promise<OrdenMedicaOut> => {
   const res = await authFetch("/ordenes-medicas/", {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(orden),
   });
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.detail || "Error al emitir orden médica");
+    const detail = errorData.detail;
+    const msg = typeof detail === "string"
+      ? detail
+      : Array.isArray(detail)
+      ? detail.map((d: any) => d.msg || JSON.stringify(d)).join(", ")
+      : typeof detail === "object" && detail !== null
+      ? JSON.stringify(detail)
+      : "Error al emitir orden médica";
+    throw new Error(msg);
   }
   return res.json();
 };

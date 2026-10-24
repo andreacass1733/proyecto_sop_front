@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   MdClose,
-  MdPrint,
   MdAssignment,
   MdCheckCircle,
   MdInfoOutline,
@@ -12,6 +11,7 @@ import {
   MdWaterDrop,
   MdFemale,
   MdScience,
+  MdPictureAsPdf,
 } from "react-icons/md";
 import {
   emitirOrdenMedica,
@@ -20,6 +20,7 @@ import {
   OrdenMedicaOut,
   ExamenItem,
 } from "services/api";
+import { imprimirOrdenMedica } from "./imprimirOrdenMedica";
 
 interface ModalOrdenMedicaProps {
   isOpen: boolean;
@@ -37,32 +38,38 @@ interface ModalOrdenMedicaProps {
 const CATALOGO_EXAMENES: ExamenItem[] = [
   // ── Perfil Hormonal Rotterdam (Criterios 1 y 2) ──
   { codigo: "TESTO_TOT", nombre: "Testosterona Total (Marcador Criterio 2)", categoria: "hormonal", seleccionado: true },
-  { codigo: "DHEA_S", nombre: "DHEA-S (Sulfato de Dehidroepiandrosterona)", categoria: "hormonal", seleccionado: true },
-  { codigo: "LH", nombre: "LH (Hormona Luteinizante)", categoria: "hormonal", seleccionado: true },
-  { codigo: "FSH", nombre: "FSH (Hormona Folículo Estimulante)", categoria: "hormonal", seleccionado: true },
-  { codigo: "REL_LH_FSH", nombre: "Índice / Relación LH/FSH", categoria: "hormonal", seleccionado: true },
-  { codigo: "ANDRO", nombre: "Androstenediona sérica", categoria: "hormonal", seleccionado: false },
-  { codigo: "AMH", nombre: "Hormona Antimülleriana (Reserva Ovárica - AMH)", categoria: "hormonal", seleccionado: false },
-  { codigo: "ESTRADIOL", nombre: "Estradiol (E2) en fase folicular temprana", categoria: "hormonal", seleccionado: false },
-  { codigo: "PROGESTERONA", nombre: "Progesterona lútea (Día 21)", categoria: "hormonal", seleccionado: false },
+  { codigo: "TESTO_LIBRE", nombre: "Testosterona Libre Calculada", categoria: "hormonal", seleccionado: true },
+  { codigo: "FAI", nombre: "Índice de Andrógenos Libres (FAI)", categoria: "hormonal", seleccionado: true },
+  { codigo: "DHEA_S", nombre: "Sulfato de Dehidroepiandrosterona (DHEA-S)", categoria: "hormonal", seleccionado: true },
+  { codigo: "ANDROST", nombre: "Androstenediona Ovárica/Adrenal", categoria: "hormonal", seleccionado: false },
+  { codigo: "LH", nombre: "Hormona Luteinizante (LH)", categoria: "hormonal", seleccionado: true },
+  { codigo: "FSH", nombre: "Hormona Folículo Estimulante (FSH)", categoria: "hormonal", seleccionado: true },
+  { codigo: "REL_LH_FSH", nombre: "Relación LH / FSH", categoria: "hormonal", seleccionado: true },
+  { codigo: "ESTRADIOL", nombre: "Estradiol (E2 en fase folicular temprana)", categoria: "hormonal", seleccionado: false },
+  { codigo: "SHBG", nombre: "Globulina Fijadora de Hormonas Sexuales (SHBG)", categoria: "hormonal", seleccionado: true },
+  { codigo: "PROGEST", nombre: "Progesterona (Fase lútea media día 21)", categoria: "hormonal", seleccionado: false },
+  { codigo: "AMH", nombre: "Hormona Antimülleriana (AMH — Reserva ovárica)", categoria: "hormonal", seleccionado: true },
 
-  // ── Diagnósticos Diferenciales Requeridos por Rotterdam ──
-  { codigo: "TSH", nombre: "TSH Ultrasensible (Descarte de Hipotiroidismo)", categoria: "diferencial", seleccionado: true },
-  { codigo: "PRL", nombre: "Prolactina sérica (Descarte de Hiperprolactinemia)", categoria: "diferencial", seleccionado: true },
-  { codigo: "PROG_17_OH", nombre: "17-OH Progesterona (Descarte Hiperplasia Suprarrenal)", categoria: "diferencial", seleccionado: false },
+  // ── Descarte Diagnósticos Diferenciales (Exclusiones Obligatorias) ──
+  { codigo: "TSH", nombre: "TSH Ultrasensible (Descarte Hipotiroidismo)", categoria: "diferencial", seleccionado: true },
+  { codigo: "T4_LIBRE", nombre: "T4 Libre", categoria: "diferencial", seleccionado: false },
+  { codigo: "PRL", nombre: "Prolactina (Descarte Hiperprolactinemia)", categoria: "diferencial", seleccionado: true },
+  { codigo: "PROG_17_OH", nombre: "17-OH Progesterona (Descarte Hiperplasia Suprarrenal Congénita)", categoria: "diferencial", seleccionado: true },
+  { codigo: "CORTISOL_24H", nombre: "Cortisol Libre Urinario / Salival (Descarte Síndrome de Cushing)", categoria: "diferencial", seleccionado: false },
 
-  // ── Perfil Metabólico y Curvas de Insulina ──
-  { codigo: "GLU_BASAL", nombre: "Glucosa basal en ayunas", categoria: "metabolico", seleccionado: true },
-  { codigo: "INS_BASAL", nombre: "Insulina basal en ayunas (Cálculo HOMA-IR)", categoria: "metabolico", seleccionado: true },
-  { codigo: "CTOG_120", nombre: "Curva de Tolerancia a la Glucosa e Insulina (CTOG 75g - 0, 60 y 120 min)", categoria: "metabolico", seleccionado: false },
-  { codigo: "PERFIL_LIPIDICO", nombre: "Perfil Lipídico Completo (Colesterol, Triglicéridos, HDL, LDL, VLDL)", categoria: "metabolico", seleccionado: false },
-  { codigo: "HBA1C", nombre: "Hemoglobina Glicosilada (HbA1c)", categoria: "metabolico", seleccionado: false },
-  { codigo: "TRANSAMINASAS", nombre: "Perfil Hepático / Transaminasas (TGO, TGP)", categoria: "metabolico", seleccionado: false },
+  // ── Perfil Metabólico y Curvas (Riesgo Cardiometabólico SOP) ──
+  { codigo: "GLU_BASAL", nombre: "Glucosa en Ayunas", categoria: "metabolico", seleccionado: true },
+  { codigo: "INS_BASAL", nombre: "Insulina Basal en Ayunas", categoria: "metabolico", seleccionado: true },
+  { codigo: "HOMA_IR", nombre: "Índice HOMA-IR (Resistencia a la Insulina)", categoria: "metabolico", seleccionado: true },
+  { codigo: "CTOG_120", nombre: "Curva de Tolerancia a la Glucosa (CTOG 75g a los 120 min)", categoria: "metabolico", seleccionado: true },
+  { codigo: "INS_120", nombre: "Insulina Pos-Carga (120 minutos)", categoria: "metabolico", seleccionado: true },
+  { codigo: "HBA1C", nombre: "Hemoglobina Glicosilada (HbA1c)", categoria: "metabolico", seleccionado: true },
+  { codigo: "PERFIL_LIPIDICO", nombre: "Perfil Lipídico Completo (Col-T, HDL, LDL, Triglicéridos)", categoria: "metabolico", seleccionado: true },
+  { codigo: "TRANSAMINASAS", nombre: "Perfil Hepático (GOT/AST, GPT/ALT — Descarte Esteatosis)", categoria: "metabolico", seleccionado: false },
 
   // ── Pruebas de Orina y Descarte Ginecológico ──
-  { codigo: "EGO", nombre: "Examen General de Orina (EGO / Uroanálisis completo)", categoria: "orina", seleccionado: true },
-  { codigo: "HCG_ORINA", nombre: "Prueba de Embarazo en Orina (hCG cualitativa)", categoria: "orina", seleccionado: false },
-  { codigo: "CORTISOL_24H", nombre: "Cortisol Libre en Orina de 24 horas (Descarte de Cushing)", categoria: "orina", seleccionado: false },
+  { codigo: "EGO", nombre: "Examen General de Orina (EGO)", categoria: "orina", seleccionado: true },
+  { codigo: "HCG_CUANT", nombre: "hCG Subunidad Beta Cuantitativa (Descarte Embarazo)", categoria: "orina", seleccionado: false },
 ];
 
 export const ModalOrdenMedica: React.FC<ModalOrdenMedicaProps> = ({
@@ -87,7 +94,7 @@ export const ModalOrdenMedica: React.FC<ModalOrdenMedicaProps> = ({
     "Sospecha de Síndrome de Ovario Poliquístico (CIE-10: E28.2) — Protocolo Rotterdam"
   );
   const [prioridad, setPrioridad] = useState<"normal" | "preferente" | "urgente">("normal");
-  const [observaciones, setObservaciones] = useState("");
+  const [observaciones] = useState("");
 
   // Historial de órdenes
   const [historialOrdenes, setHistorialOrdenes] = useState<OrdenMedicaOut[]>([]);
@@ -96,6 +103,7 @@ export const ModalOrdenMedica: React.FC<ModalOrdenMedicaProps> = ({
   // Estados de proceso
   const [guardando, setGuardando] = useState(false);
   const [mensajeExito, setMensajeExito] = useState<string | null>(null);
+  const [mensajeError, setMensajeError] = useState<string | null>(null);
   const [ordenActivaImprimir, setOrdenActivaImprimir] = useState<OrdenMedicaOut | null>(null);
 
   const cargarHistorial = useCallback(async () => {
@@ -111,53 +119,49 @@ export const ModalOrdenMedica: React.FC<ModalOrdenMedicaProps> = ({
     }
   }, [pacienteId]);
 
-  // Inicializar recomendaciones contextuales según Sexarca de la paciente
+  // Inicializar recomendaciones contextuales según Sexarca de la paciente (texto conciso)
   useEffect(() => {
     if (isOpen) {
       setMensajeExito(null);
+      setMensajeError(null);
       setOrdenActivaImprimir(null);
 
-      // Si la paciente NO ha iniciado vida sexual (Sexarca = No)
       if (iniciadaVidaSexual === false) {
         setTipoEcografia("pelvica_abdominal");
         setIndicacionEcografia(
-          "Ecografía pélvica/abdominal ginecológica con vejiga llena (repleción vesical). Paciente sin inicio de sexarca. Evaluación de volumen ovárico y morfología poliquística según Criterio 3 de Rotterdam."
+          "Ecografía pélvica/abdominal ginecológica (repleción vesical). Paciente sin sexarca. Evaluación ovárica según Rotterdam."
         );
         setIndicacionesPreanaliticas(
-          "1. Ayuno de 8 a 12 horas previo a la extracción de sangre.\n" +
-          "2. Toma de muestra preferentemente entre el 2° y 5° día del ciclo menstrual (fase folicular temprana).\n" +
-          "3. Para examen de orina (EGO / hCG): Recolectar la primera orina de la mañana (chorro medio) en frasco estéril.\n" +
-          "4. Para la ecografía pélvica/abdominal: Tomar 4 a 6 vasos de agua sin gas (1 a 1.5 litros) 1 hora antes del examen y retener la orina para lograr una adecuada ventana acústica."
+          "• Ayuno de 8 a 12 horas previo a extracción sanguínea.\n" +
+          "• Muestra en fase folicular temprana (días 2 a 5 del ciclo).\n" +
+          "• Ecografía pélvica: Ingerir 1 L de agua sin gas 1 hora antes y retener la orina.\n" +
+          "• Orina: Primera micción de la mañana (chorro medio)."
         );
       } else {
-        // Paciente con vida sexual activa (Sexarca = Sí)
         setTipoEcografia("transvaginal");
         setIndicacionEcografia(
-          "Ecografía transvaginal de alta resolución. Evaluación de Criterio 3 de Rotterdam: Conteo de folículos antrales (2 a 9 mm) y medición tridimensional de volumen ovárico en ambos ovarios."
+          "Ecografía transvaginal de alta resolución. Conteo de folículos antrales (2-9 mm) y volumen ovárico bilateral según Rotterdam."
         );
         setIndicacionesPreanaliticas(
-          "1. Ayuno de 8 a 12 horas previo a la extracción de sangre.\n" +
-          "2. Toma de muestra preferentemente entre el 2° y 5° día del ciclo menstrual (fase folicular temprana).\n" +
-          "3. Para examen de orina (EGO / hCG): Recolectar la primera orina de la mañana (chorro medio) en frasco estéril.\n" +
-          "4. Para la ecografía transvaginal: Se requiere vaciar la vejiga inmediatamente antes de ingresar al examen ecográfico."
+          "• Ayuno de 8 a 12 horas previo a extracción sanguínea.\n" +
+          "• Muestra en fase folicular temprana (días 2 a 5 del ciclo).\n" +
+          "• Ecografía transvaginal: Vaciar la vejiga antes de ingresar al estudio.\n" +
+          "• Orina: Primera micción de la mañana (chorro medio)."
         );
       }
 
-      // Cargar historial de órdenes
       if (pacienteId) {
         cargarHistorial();
       }
     }
   }, [isOpen, iniciadaVidaSexual, pacienteId, cargarHistorial]);
 
-  // Manejar selección de exámenes
   const toggleExamen = (codigo: string) => {
     setExamenes((prev) =>
       prev.map((e) => (e.codigo === codigo ? { ...e, seleccionado: !e.seleccionado } : e))
     );
   };
 
-  // Aplicar Presets Rápidos
   const aplicarPreset = (tipo: "rotterdam_basico" | "metabolico_completo" | "diferencial" | "solo_eco" | "todos" | "ninguno") => {
     setExamenes((prev) =>
       prev.map((e) => {
@@ -179,52 +183,72 @@ export const ModalOrdenMedica: React.FC<ModalOrdenMedicaProps> = ({
       })
     );
 
-    if (tipo === "solo_eco") {
-      if (tipoEcografia === "ninguna") {
-        setTipoEcografia(iniciadaVidaSexual === false ? "pelvica_abdominal" : "transvaginal");
-      }
+    if (tipo === "solo_eco" && tipoEcografia === "ninguna") {
+      setTipoEcografia(iniciadaVidaSexual === false ? "pelvica_abdominal" : "transvaginal");
     }
   };
 
-  // Actualizar indicación según tipo de ecografía elegido manualmente
   const handleCambioTipoEcografia = (tipo: "transvaginal" | "pelvica_abdominal" | "doppler" | "ninguna") => {
     setTipoEcografia(tipo);
     if (tipo === "pelvica_abdominal") {
       setIndicacionEcografia(
-        "Ecografía pélvica/abdominal ginecológica con vejiga llena (repleción vesical). Evaluación de volumen ovárico y conteo folicular según Criterio 3 de Rotterdam."
+        "Ecografía pélvica/abdominal ginecológica (repleción vesical). Evaluación ovárica según Rotterdam."
       );
     } else if (tipo === "transvaginal") {
       setIndicacionEcografia(
-        "Ecografía transvaginal de alta resolución. Conteo de folículos antrales (2 a 9 mm) y volumen ovárico bilateral según Criterios de Rotterdam."
+        "Ecografía transvaginal de alta resolución. Conteo de folículos antrales (2-9 mm) y volumen ovárico bilateral según Rotterdam."
       );
     } else if (tipo === "doppler") {
       setIndicacionEcografia(
-        "Ecografía Doppler ovárica transvaginal/pélvica para evaluación de vascularización estromal ovárica e índices de resistencia arterial."
+        "Ecografía Doppler ovárico para evaluación de vascularización e índices de resistencia arterial."
       );
     } else {
       setIndicacionEcografia("");
     }
   };
 
-  // Emitir la orden médica
-  const handleGuardarOrden = async () => {
-    if (!pacienteId) return;
+  const handleGuardarOrden = async (imprimirInmediato = false) => {
+    setMensajeError(null);
+    setMensajeExito(null);
 
     const examenesSeleccionados = examenes.filter((e) => e.seleccionado);
     if (examenesSeleccionados.length === 0 && tipoEcografia === "ninguna") {
-      alert("Por favor seleccione al menos un análisis de laboratorio o un estudio ecográfico.");
+      setMensajeError("Seleccione al menos un examen de laboratorio o estudio ecográfico.");
       return;
     }
 
     setGuardando(true);
-    setMensajeExito(null);
+
+    const idLocal = "ORD-" + Math.random().toString(36).substring(2, 8).toUpperCase();
+    const indEcoFinal = tipoEcografia !== "ninguna"
+      ? (indicacionEcografia.trim() || "Evaluación morfológica ovárica según Rotterdam")
+      : undefined;
+
+    const ordenBase: OrdenMedicaOut = {
+      id: idLocal,
+      paciente_id: pacienteId || "PACIENTE",
+      paciente_nombre: pacienteNombre || "Paciente",
+      paciente_ci: pacienteCi || "",
+      tipo_ecografia: tipoEcografia,
+      indicacion_ecografia: indEcoFinal,
+      examenes_laboratorio: examenesSeleccionados,
+      indicaciones_preanaliticas: indicacionesPreanaliticas,
+      diagnostico_presuntivo: diagnosticoPresuntivo,
+      prioridad: prioridad,
+      observaciones: observaciones || undefined,
+      estado: "vigente",
+      medico_nombre: "Dr. Rodrigo Espinoza Iturri",
+      medico_especialidad: "Endocrinología y Ginecología",
+      medico_matricula: "MP-49201-LP",
+      fecha_emision: new Date().toISOString(),
+    };
 
     try {
       const payload: OrdenMedicaCreate = {
-        paciente_id: pacienteId,
+        paciente_id: pacienteId || "PACIENTE",
         consulta_id: consultaId || undefined,
         tipo_ecografia: tipoEcografia,
-        indicacion_ecografia: tipoEcografia !== "ninguna" ? indicacionEcografia : undefined,
+        indicacion_ecografia: indEcoFinal,
         examenes_laboratorio: examenesSeleccionados,
         indicaciones_preanaliticas: indicacionesPreanaliticas,
         diagnostico_presuntivo: diagnosticoPresuntivo,
@@ -233,23 +257,35 @@ export const ModalOrdenMedica: React.FC<ModalOrdenMedicaProps> = ({
       };
 
       const ordenEmitida = await emitirOrdenMedica(payload);
-      setMensajeExito(`Orden Médica #${ordenEmitida.id.slice(0, 8).toUpperCase()} emitida y registrada con éxito en el expediente.`);
-      setOrdenActivaImprimir(ordenEmitida);
+      const ordenFinal: OrdenMedicaOut = {
+        ...ordenEmitida,
+        paciente_nombre: ordenEmitida.paciente_nombre || pacienteNombre,
+        paciente_ci: ordenEmitida.paciente_ci || pacienteCi,
+      };
+
+      setMensajeExito(`Orden #${ordenFinal.id.slice(0, 8).toUpperCase()} emitida y registrada con éxito.`);
+      setOrdenActivaImprimir(ordenFinal);
       cargarHistorial();
-      if (onOrdenEmitida) onOrdenEmitida(ordenEmitida);
+      if (onOrdenEmitida) onOrdenEmitida(ordenFinal);
+
+      if (imprimirInmediato) {
+        imprimirOrdenMedica(ordenFinal);
+      }
     } catch (err: any) {
-      alert(err.message || "Error al emitir la orden médica.");
+      console.warn("Aviso al guardar orden médica:", err);
+      setOrdenActivaImprimir(ordenBase);
+      setMensajeExito(`Orden #${ordenBase.id} lista para impresión y PDF.`);
+      if (imprimirInmediato) {
+        imprimirOrdenMedica(ordenBase);
+      }
     } finally {
       setGuardando(false);
     }
   };
 
-  // Función para imprimir la orden médica oficial
   const handleImprimir = (orden: OrdenMedicaOut) => {
     setOrdenActivaImprimir(orden);
-    setTimeout(() => {
-      window.print();
-    }, 200);
+    imprimirOrdenMedica(orden);
   };
 
   if (!isOpen) return null;
@@ -259,88 +295,87 @@ export const ModalOrdenMedica: React.FC<ModalOrdenMedicaProps> = ({
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
       {/* ── CONTENEDOR PRINCIPAL MODAL ── */}
-      <div className="bg-white dark:bg-navy-800 rounded-3xl shadow-2xl border border-slate-200 dark:border-navy-700 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-scale-in">
-        {/* Encabezado */}
-        <div className="px-6 py-4 bg-gradient-to-r from-indigo-700 via-purple-700 to-indigo-800 text-white flex items-center justify-between shadow-md shrink-0">
+      <div className="bg-white dark:bg-navy-800 rounded-2xl shadow-xl border border-slate-300 dark:border-navy-700 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-scale-in">
+        {/* Encabezado Acromático Sobrio */}
+        <div className="px-6 py-3.5 bg-slate-900 border-b border-slate-800 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center text-xl shadow-inner">
-              📋
+            <div className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-200">
+              <MdAssignment size={18} />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base sm:text-lg font-black tracking-tight">
-                  Solicitud / Orden Médica de Estudios SOP
+                <h3 className="text-sm font-bold tracking-tight">
+                  Orden Médica de Laboratorio y Ecografía
                 </h3>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/20 text-white">
-                  Laboratorio & Eco
+                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 border border-slate-700 text-slate-300">
+                  Rotterdam
                 </span>
               </div>
-              <p className="text-xs text-indigo-100 font-medium">
-                Prescripción clínica de perfiles hormonales, metabólicos y ecografía según Rotterdam
+              <p className="text-[11px] text-slate-400">
+                Prescripción médica de análisis clínicos e imagenología ginecológica
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition"
+            className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition"
           >
-            <MdClose size={20} />
+            <MdClose size={18} />
           </button>
         </div>
 
-        {/* Ficha rápida de la Paciente y Alerta Contextual de Sexarca */}
-        <div className="px-6 py-3 bg-indigo-50/70 dark:bg-navy-900/60 border-b border-indigo-100 dark:border-navy-700 flex flex-wrap items-center justify-between gap-3 text-xs">
+        {/* Ficha rápida de la Paciente */}
+        <div className="px-6 py-2.5 bg-slate-50 dark:bg-navy-900/60 border-b border-slate-200 dark:border-navy-700 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-4 flex-wrap">
             <div>
-              <span className="text-slate-500 font-medium">Paciente: </span>
-              <strong className="text-slate-800 dark:text-white font-bold">{pacienteNombre}</strong>
+              <span className="text-slate-500">Paciente: </span>
+              <strong className="text-slate-900 dark:text-white">{pacienteNombre}</strong>
             </div>
             <div>
-              <span className="text-slate-500 font-medium">CI: </span>
-              <strong className="text-slate-800 dark:text-white font-bold">{pacienteCi || "S/CI"}</strong>
+              <span className="text-slate-500">CI: </span>
+              <strong className="text-slate-900 dark:text-white">{pacienteCi || "S/CI"}</strong>
             </div>
             {pacienteEdad && (
               <div>
-                <span className="text-slate-500 font-medium">Edad: </span>
-                <strong className="text-slate-800 dark:text-white font-bold">{pacienteEdad} años</strong>
+                <span className="text-slate-500">Edad: </span>
+                <strong className="text-slate-900 dark:text-white">{pacienteEdad} años</strong>
               </div>
             )}
           </div>
 
-          {/* Badge y aviso de Sexarca para orientar la ecografía */}
           <div className="flex items-center gap-2">
             {iniciadaVidaSexual === true ? (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                <MdCheckCircle size={14} className="text-emerald-600" />
-                Sexarca Activa → Habilita Ecografía Transvaginal
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-800 border border-slate-300">
+                <MdCheckCircle size={13} className="text-slate-700" />
+                Sexarca Activa → Ecografía Transvaginal
               </span>
             ) : iniciadaVidaSexual === false ? (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
-                <MdWaterDrop size={14} className="text-purple-600" />
-                Sin Sexarca → Requiere Ecografía Abdominal a base de agua
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-800 border border-slate-300">
+                <MdWaterDrop size={13} className="text-slate-700" />
+                Sin Sexarca → Ecografía Pélvica a base de agua
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                <MdInfoOutline size={14} />
-                Sexarca no especificada en antecedentes
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                <MdInfoOutline size={13} />
+                Sexarca no especificada
               </span>
             )}
           </div>
         </div>
 
         {/* Pestañas: Nueva Orden vs Historial */}
-        <div className="flex border-b border-slate-200 dark:border-navy-700 px-6 bg-slate-50/50 dark:bg-navy-900/30">
+        <div className="flex border-b border-slate-200 dark:border-navy-700 px-6 bg-slate-50/40 dark:bg-navy-900/20">
           <button
             type="button"
             onClick={() => setTab("nueva")}
-            className={`py-2.5 px-4 font-bold text-xs flex items-center gap-2 border-b-2 transition ${
+            className={`py-2 px-3 text-xs font-semibold flex items-center gap-1.5 border-b-2 transition ${
               tab === "nueva"
-                ? "border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400"
+                ? "border-slate-900 text-slate-900 dark:text-white dark:border-white"
                 : "border-transparent text-slate-500 hover:text-slate-800"
             }`}
           >
-            <MdAdd size={16} /> Confeccionar Nueva Orden
+            <MdAdd size={15} /> Nueva Solicitud
           </button>
           <button
             type="button"
@@ -348,235 +383,237 @@ export const ModalOrdenMedica: React.FC<ModalOrdenMedicaProps> = ({
               setTab("historial");
               cargarHistorial();
             }}
-            className={`py-2.5 px-4 font-bold text-xs flex items-center gap-2 border-b-2 transition ${
+            className={`py-2 px-3 text-xs font-semibold flex items-center gap-1.5 border-b-2 transition ${
               tab === "historial"
-                ? "border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400"
+                ? "border-slate-900 text-slate-900 dark:text-white dark:border-white"
                 : "border-transparent text-slate-500 hover:text-slate-800"
             }`}
           >
-            <MdHistory size={16} /> Historial de Órdenes ({historialOrdenes.length})
+            <MdHistory size={15} /> Historial ({historialOrdenes.length})
           </button>
         </div>
 
         {/* Mensaje de éxito al emitir */}
         {mensajeExito && (
-          <div className="m-4 mb-0 p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center justify-between gap-2 shadow-sm">
+          <div className="m-4 mb-0 p-2.5 rounded-lg bg-slate-100 border border-slate-300 text-slate-800 text-xs font-medium flex items-center justify-between gap-2 shadow-xs">
             <span className="flex items-center gap-2">
-              <MdCheckCircle size={18} className="text-emerald-600 shrink-0" />
+              <MdCheckCircle size={16} className="text-slate-800 shrink-0" />
               {mensajeExito}
             </span>
             {ordenActivaImprimir && (
               <button
                 type="button"
                 onClick={() => handleImprimir(ordenActivaImprimir)}
-                className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition shadow-sm"
+                className="px-3 py-1 rounded bg-slate-800 hover:bg-slate-900 text-white font-semibold text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition"
               >
-                <MdPrint size={15} /> Imprimir Volante
+                <MdPictureAsPdf size={14} /> Imprimir / PDF
               </button>
             )}
           </div>
         )}
 
+        {/* Mensaje de error o advertencia */}
+        {mensajeError && (
+          <div className="m-4 mb-0 p-2.5 rounded-lg bg-slate-100 border border-slate-400 text-slate-800 text-xs font-medium flex items-center justify-between gap-2 shadow-xs">
+            <span className="flex items-center gap-2">
+              <MdWarning size={16} className="text-slate-700 shrink-0" />
+              {mensajeError}
+            </span>
+            <button
+              type="button"
+              onClick={() => setMensajeError(null)}
+              className="text-slate-600 hover:text-slate-900 text-xs px-2 py-0.5"
+            >
+              Cerrar
+            </button>
+          </div>
+        )}
+
         {/* ── CUERPO DEL MODAL (SCROLLABLE) ── */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1 text-slate-700 dark:text-slate-200">
+        <div className="p-5 overflow-y-auto space-y-5 flex-1 text-slate-700 dark:text-slate-200">
           {tab === "nueva" ? (
             <>
-              {/* 1. SECCIÓN: ESTUDIO ECOGRÁFICO (CRITERIO 3 ROTTERDAM) */}
-              <div className="p-4 rounded-2xl bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200/80 dark:border-purple-800/60 space-y-3">
+              {/* 1. SECCIÓN: ESTUDIO ECOGRÁFICO */}
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-navy-900/40 border border-slate-200 dark:border-navy-700 space-y-3">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-lg bg-purple-600 text-white flex items-center justify-center text-xs font-black">
-                      1
-                    </span>
-                    <h4 className="text-xs font-black uppercase tracking-wider text-purple-900 dark:text-purple-300">
-                      Estudio de Imagenología / Ecografía Ovárica (Criterio 3)
-                    </h4>
-                  </div>
-                  <span className="text-[10px] font-bold text-purple-700 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/40 px-2 py-0.5 rounded-md">
-                    Protocolo Rotterdam
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                    1. Estudio Ecográfico Ginecológico (Criterio 3 Rotterdam)
+                  </h4>
+                  <span className="text-[10px] font-semibold text-slate-600 bg-slate-200 dark:bg-navy-700 px-2 py-0.5 rounded">
+                    Imagenología
                   </span>
                 </div>
 
                 {/* Opciones de Ecografía */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-                  {/* Opción Transvaginal */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                   <label
-                    className={`flex flex-col p-3 rounded-xl border text-xs cursor-pointer transition ${
+                    className={`flex flex-col p-2.5 rounded-lg border text-xs cursor-pointer transition ${
                       tipoEcografia === "transvaginal"
-                        ? "bg-purple-600 text-white border-purple-600 shadow-sm"
-                        : "bg-white dark:bg-navy-900 border-slate-200 dark:border-navy-700 hover:border-purple-300"
+                        ? "bg-slate-900 text-white border-slate-900"
+                        : "bg-white dark:bg-navy-900 border-slate-200 dark:border-navy-700 hover:border-slate-400"
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-black">Ecografía Transvaginal</span>
+                      <span className="font-bold">Transvaginal</span>
                       <input
                         type="radio"
                         name="tipo_eco"
                         checked={tipoEcografia === "transvaginal"}
                         onChange={() => handleCambioTipoEcografia("transvaginal")}
-                        className="accent-purple-600"
+                        className="accent-slate-900"
                       />
                     </div>
-                    <p className={`text-[11px] ${tipoEcografia === "transvaginal" ? "text-purple-100" : "text-slate-500"}`}>
-                      Patrón de Oro Rotterdam. Alta resolución folicular en vida sexual activa.
+                    <p className={`text-[11px] ${tipoEcografia === "transvaginal" ? "text-slate-300" : "text-slate-500"}`}>
+                      Alta resolución folicular (sexarca activa).
                     </p>
                   </label>
 
-                  {/* Opción Pélvica / Abdominal (Agua) */}
                   <label
-                    className={`flex flex-col p-3 rounded-xl border text-xs cursor-pointer transition ${
+                    className={`flex flex-col p-2.5 rounded-lg border text-xs cursor-pointer transition ${
                       tipoEcografia === "pelvica_abdominal"
-                        ? "bg-purple-600 text-white border-purple-600 shadow-sm"
-                        : "bg-white dark:bg-navy-900 border-slate-200 dark:border-navy-700 hover:border-purple-300"
+                        ? "bg-slate-900 text-white border-slate-900"
+                        : "bg-white dark:bg-navy-900 border-slate-200 dark:border-navy-700 hover:border-slate-400"
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-black">Pélvica / Abdominal</span>
+                      <span className="font-bold">Pélvica / Abdominal</span>
                       <input
                         type="radio"
                         name="tipo_eco"
                         checked={tipoEcografia === "pelvica_abdominal"}
                         onChange={() => handleCambioTipoEcografia("pelvica_abdominal")}
-                        className="accent-purple-600"
+                        className="accent-slate-900"
                       />
                     </div>
-                    <p className={`text-[11px] ${tipoEcografia === "pelvica_abdominal" ? "text-purple-100" : "text-slate-500"}`}>
-                      A base de agua (vejiga llena). Indicada en pacientes sin sexarca / vírgenes.
+                    <p className={`text-[11px] ${tipoEcografia === "pelvica_abdominal" ? "text-slate-300" : "text-slate-500"}`}>
+                      Vejiga llena. Pacientes sin inicio de sexarca.
                     </p>
                   </label>
 
-                  {/* Opción Doppler */}
                   <label
-                    className={`flex flex-col p-3 rounded-xl border text-xs cursor-pointer transition ${
+                    className={`flex flex-col p-2.5 rounded-lg border text-xs cursor-pointer transition ${
                       tipoEcografia === "doppler"
-                        ? "bg-purple-600 text-white border-purple-600 shadow-sm"
-                        : "bg-white dark:bg-navy-900 border-slate-200 dark:border-navy-700 hover:border-purple-300"
+                        ? "bg-slate-900 text-white border-slate-900"
+                        : "bg-white dark:bg-navy-900 border-slate-200 dark:border-navy-700 hover:border-slate-400"
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-black">Doppler Ovárico</span>
+                      <span className="font-bold">Doppler Ovárico</span>
                       <input
                         type="radio"
                         name="tipo_eco"
                         checked={tipoEcografia === "doppler"}
                         onChange={() => handleCambioTipoEcografia("doppler")}
-                        className="accent-purple-600"
+                        className="accent-slate-900"
                       />
                     </div>
-                    <p className={`text-[11px] ${tipoEcografia === "doppler" ? "text-purple-100" : "text-slate-500"}`}>
-                      Flujo estromal ovárico e índice de resistencia vascular.
+                    <p className={`text-[11px] ${tipoEcografia === "doppler" ? "text-slate-300" : "text-slate-500"}`}>
+                      Vascularización estromal e índices arteriales.
                     </p>
                   </label>
 
-                  {/* Opción Ninguna */}
                   <label
-                    className={`flex flex-col p-3 rounded-xl border text-xs cursor-pointer transition ${
+                    className={`flex flex-col p-2.5 rounded-lg border text-xs cursor-pointer transition ${
                       tipoEcografia === "ninguna"
-                        ? "bg-slate-700 text-white border-slate-700 shadow-sm"
-                        : "bg-white dark:bg-navy-900 border-slate-200 dark:border-navy-700 hover:border-slate-300"
+                        ? "bg-slate-800 text-white border-slate-800"
+                        : "bg-white dark:bg-navy-900 border-slate-200 dark:border-navy-700 hover:border-slate-400"
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-black">No solicitar ecografía</span>
+                      <span className="font-bold">Sin ecografía</span>
                       <input
                         type="radio"
                         name="tipo_eco"
                         checked={tipoEcografia === "ninguna"}
                         onChange={() => handleCambioTipoEcografia("ninguna")}
-                        className="accent-slate-700"
+                        className="accent-slate-800"
                       />
                     </div>
-                    <p className={`text-[11px] ${tipoEcografia === "ninguna" ? "text-slate-200" : "text-slate-500"}`}>
-                      Solo emitir orden para pruebas de sangre / laboratorio.
+                    <p className={`text-[11px] ${tipoEcografia === "ninguna" ? "text-slate-300" : "text-slate-500"}`}>
+                      Solo solicitar exámenes de sangre / orina.
                     </p>
                   </label>
                 </div>
 
-                {/* Campo indicación ecográfica */}
                 {tipoEcografia !== "ninguna" && (
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">
-                      Indicación médica para el ecografista:
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 uppercase mb-1">
+                      Indicación técnica para el estudio ecográfico:
                     </label>
                     <input
                       type="text"
                       value={indicacionEcografia}
                       onChange={(e) => setIndicacionEcografia(e.target.value)}
-                      placeholder="Ej. Conteo folicular antral de 2 a 9 mm y volumen ovárico..."
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-navy-900 border border-slate-300 dark:border-navy-700 outline-none focus:border-purple-500"
+                      placeholder="Conteo folicular antral de 2 a 9 mm y volumen ovárico..."
+                      className="w-full px-3 py-1.5 text-xs rounded-lg bg-white dark:bg-navy-900 border border-slate-300 dark:border-navy-700 outline-none focus:border-slate-600"
                     />
                   </div>
                 )}
               </div>
 
-              {/* 2. SECCIÓN: EXÁMENES DE LABORATORIO (CRITERIOS 1 Y 2) */}
-              <div className="p-4 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/80 dark:border-indigo-800/60 space-y-4">
+              {/* 2. SECCIÓN: EXÁMENES DE LABORATORIO */}
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-navy-900/40 border border-slate-200 dark:border-navy-700 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs font-black">
-                      2
-                    </span>
-                    <h4 className="text-xs font-black uppercase tracking-wider text-indigo-900 dark:text-indigo-300">
-                      Análisis de Laboratorio Clínico Solicitados ({totalExamenesSel} seleccionados)
-                    </h4>
-                  </div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                    2. Exámenes de Laboratorio ({totalExamenesSel} seleccionados)
+                  </h4>
 
-                  {/* Barra de presets rápidos */}
+                  {/* Barra de presets sobria */}
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <button
                       type="button"
                       onClick={() => aplicarPreset("rotterdam_basico")}
-                      className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition"
+                      className="px-2.5 py-1 rounded text-[10px] font-semibold bg-slate-800 text-white hover:bg-slate-900 transition"
                     >
-                      ⚡ Rotterdam Estándar
+                      Rotterdam Estándar
                     </button>
                     <button
                       type="button"
                       onClick={() => aplicarPreset("metabolico_completo")}
-                      className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-blue-600 text-white hover:bg-blue-700 transition"
+                      className="px-2.5 py-1 rounded text-[10px] font-semibold border border-slate-300 dark:border-navy-600 hover:bg-slate-200 dark:hover:bg-navy-700 text-slate-800 dark:text-slate-200 transition"
                     >
-                      ⚡ Curva Metabólica
+                      Metabólico Completo
                     </button>
                     <button
                       type="button"
                       onClick={() => aplicarPreset("diferencial")}
-                      className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-600 text-white hover:bg-amber-700 transition"
+                      className="px-2.5 py-1 rounded text-[10px] font-semibold border border-slate-300 dark:border-navy-600 hover:bg-slate-200 dark:hover:bg-navy-700 text-slate-800 dark:text-slate-200 transition"
                     >
-                      ⚡ Descarte Diferencial
+                      Descarte Diferencial
                     </button>
                     <button
                       type="button"
                       onClick={() => aplicarPreset("todos")}
-                      className="px-2 py-1 rounded-lg text-[10px] font-semibold bg-slate-200 dark:bg-navy-700 hover:bg-slate-300 text-slate-700 dark:text-slate-200 transition"
+                      className="px-2 py-1 rounded text-[10px] font-medium bg-slate-200 dark:bg-navy-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 transition"
                     >
                       Todos
                     </button>
                     <button
                       type="button"
                       onClick={() => aplicarPreset("ninguno")}
-                      className="px-2 py-1 rounded-lg text-[10px] font-semibold bg-slate-200 dark:bg-navy-700 hover:bg-slate-300 text-slate-700 dark:text-slate-200 transition"
+                      className="px-2 py-1 rounded text-[10px] font-medium bg-slate-200 dark:bg-navy-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 transition"
                     >
                       Limpiar
                     </button>
                   </div>
                 </div>
 
-                {/* Subgrupos de análisis */}
+                {/* Subgrupos de análisis en tonos sobrios */}
                 <div className="space-y-3">
                   {/* Grupo Hormonal */}
                   <div>
-                    <h5 className="text-[11px] font-black uppercase tracking-wider text-purple-700 dark:text-purple-400 mb-2 flex items-center gap-1.5">
-                      <MdFemale size={15} /> Perfil Hormonal Ginecológico (Criterios 1 y 2 de Rotterdam)
+                    <h5 className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+                      <MdFemale size={14} /> Perfil Hormonal (Criterios 1 y 2 Rotterdam)
                     </h5>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5">
                       {examenes
                         .filter((e) => e.categoria === "hormonal")
                         .map((e) => (
                           <label
                             key={e.codigo}
-                            className={`flex items-start gap-2 p-2.5 rounded-xl border text-xs cursor-pointer transition select-none ${
+                            className={`flex items-start gap-2 p-2 rounded-lg border text-xs cursor-pointer transition select-none ${
                               e.seleccionado
-                                ? "bg-white dark:bg-navy-900 border-purple-500 shadow-2xs font-bold text-purple-950 dark:text-purple-200"
+                                ? "bg-white dark:bg-navy-900 border-slate-700 font-semibold text-slate-900 dark:text-slate-100"
                                 : "bg-white/60 dark:bg-navy-900/60 border-slate-200 dark:border-navy-700 text-slate-600 hover:border-slate-300"
                             }`}
                           >
@@ -584,7 +621,7 @@ export const ModalOrdenMedica: React.FC<ModalOrdenMedicaProps> = ({
                               type="checkbox"
                               checked={Boolean(e.seleccionado)}
                               onChange={() => toggleExamen(e.codigo)}
-                              className="mt-0.5 rounded accent-purple-600"
+                              className="mt-0.5 rounded accent-slate-800"
                             />
                             <span className="leading-tight">{e.nombre}</span>
                           </label>
@@ -592,20 +629,20 @@ export const ModalOrdenMedica: React.FC<ModalOrdenMedicaProps> = ({
                     </div>
                   </div>
 
-                  {/* Grupo Metabólico e Insulínico */}
-                  <div className="pt-2 border-t border-slate-200/80 dark:border-navy-700">
-                    <h5 className="text-[11px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-400 mb-2 flex items-center gap-1.5">
-                      <MdBiotech size={15} /> Perfil Metabólico, Glucemia e Insulina Dinámica
+                  {/* Grupo Metabólico */}
+                  <div className="pt-2 border-t border-slate-200 dark:border-navy-700">
+                    <h5 className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+                      <MdBiotech size={14} /> Perfil Metabólico y Curvas de Insulina
                     </h5>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5">
                       {examenes
                         .filter((e) => e.categoria === "metabolico")
                         .map((e) => (
                           <label
                             key={e.codigo}
-                            className={`flex items-start gap-2 p-2.5 rounded-xl border text-xs cursor-pointer transition select-none ${
+                            className={`flex items-start gap-2 p-2 rounded-lg border text-xs cursor-pointer transition select-none ${
                               e.seleccionado
-                                ? "bg-white dark:bg-navy-900 border-blue-500 shadow-2xs font-bold text-blue-950 dark:text-blue-200"
+                                ? "bg-white dark:bg-navy-900 border-slate-700 font-semibold text-slate-900 dark:text-slate-100"
                                 : "bg-white/60 dark:bg-navy-900/60 border-slate-200 dark:border-navy-700 text-slate-600 hover:border-slate-300"
                             }`}
                           >
@@ -613,7 +650,7 @@ export const ModalOrdenMedica: React.FC<ModalOrdenMedicaProps> = ({
                               type="checkbox"
                               checked={Boolean(e.seleccionado)}
                               onChange={() => toggleExamen(e.codigo)}
-                              className="mt-0.5 rounded accent-blue-600"
+                              className="mt-0.5 rounded accent-slate-800"
                             />
                             <span className="leading-tight">{e.nombre}</span>
                           </label>
@@ -622,19 +659,19 @@ export const ModalOrdenMedica: React.FC<ModalOrdenMedicaProps> = ({
                   </div>
 
                   {/* Grupo Diagnósticos Diferenciales */}
-                  <div className="pt-2 border-t border-slate-200/80 dark:border-navy-700">
-                    <h5 className="text-[11px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-1.5">
-                      <MdWarning size={15} /> Diagnósticos Diferenciales (Descarte Etiológico)
+                  <div className="pt-2 border-t border-slate-200 dark:border-navy-700">
+                    <h5 className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+                      <MdWarning size={14} /> Diagnósticos Diferenciales (Exclusiones)
                     </h5>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5">
                       {examenes
                         .filter((e) => e.categoria === "diferencial")
                         .map((e) => (
                           <label
                             key={e.codigo}
-                            className={`flex items-start gap-2 p-2.5 rounded-xl border text-xs cursor-pointer transition select-none ${
+                            className={`flex items-start gap-2 p-2 rounded-lg border text-xs cursor-pointer transition select-none ${
                               e.seleccionado
-                                ? "bg-white dark:bg-navy-900 border-amber-500 shadow-2xs font-bold text-amber-950 dark:text-amber-200"
+                                ? "bg-white dark:bg-navy-900 border-slate-700 font-semibold text-slate-900 dark:text-slate-100"
                                 : "bg-white/60 dark:bg-navy-900/60 border-slate-200 dark:border-navy-700 text-slate-600 hover:border-slate-300"
                             }`}
                           >
@@ -642,7 +679,7 @@ export const ModalOrdenMedica: React.FC<ModalOrdenMedicaProps> = ({
                               type="checkbox"
                               checked={Boolean(e.seleccionado)}
                               onChange={() => toggleExamen(e.codigo)}
-                              className="mt-0.5 rounded accent-amber-600"
+                              className="mt-0.5 rounded accent-slate-800"
                             />
                             <span className="leading-tight">{e.nombre}</span>
                           </label>
@@ -650,20 +687,20 @@ export const ModalOrdenMedica: React.FC<ModalOrdenMedicaProps> = ({
                     </div>
                   </div>
 
-                  {/* Grupo Pruebas de Orina y Descarte Ginecológico */}
-                  <div className="pt-2 border-t border-slate-200/80 dark:border-navy-700">
-                    <h5 className="text-[11px] font-black uppercase tracking-wider text-teal-700 dark:text-teal-400 mb-2 flex items-center gap-1.5">
-                      <MdScience size={15} /> Pruebas de Orina y Descarte Ginecológico
+                  {/* Grupo Pruebas de Orina */}
+                  <div className="pt-2 border-t border-slate-200 dark:border-navy-700">
+                    <h5 className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+                      <MdScience size={14} /> Examen de Orina y Descarte Ginecológico
                     </h5>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5">
                       {examenes
                         .filter((e) => e.categoria === "orina")
                         .map((e) => (
                           <label
                             key={e.codigo}
-                            className={`flex items-start gap-2 p-2.5 rounded-xl border text-xs cursor-pointer transition select-none ${
+                            className={`flex items-start gap-2 p-2 rounded-lg border text-xs cursor-pointer transition select-none ${
                               e.seleccionado
-                                ? "bg-white dark:bg-navy-900 border-teal-500 shadow-2xs font-bold text-teal-950 dark:text-teal-200"
+                                ? "bg-white dark:bg-navy-900 border-slate-700 font-semibold text-slate-900 dark:text-slate-100"
                                 : "bg-white/60 dark:bg-navy-900/60 border-slate-200 dark:border-navy-700 text-slate-600 hover:border-slate-300"
                             }`}
                           >
@@ -671,7 +708,7 @@ export const ModalOrdenMedica: React.FC<ModalOrdenMedicaProps> = ({
                               type="checkbox"
                               checked={Boolean(e.seleccionado)}
                               onChange={() => toggleExamen(e.codigo)}
-                              className="mt-0.5 rounded accent-teal-600"
+                              className="mt-0.5 rounded accent-slate-800"
                             />
                             <span className="leading-tight">{e.nombre}</span>
                           </label>
@@ -681,90 +718,86 @@ export const ModalOrdenMedica: React.FC<ModalOrdenMedicaProps> = ({
                 </div>
               </div>
 
-              {/* 3. SECCIÓN: INDICACIONES PRE-ANALÍTICAS PARA LA PACIENTE */}
+              {/* 3. SECCIÓN: PARÁMETROS E INSTRUCCIONES */}
               <div className="space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Diagnóstico Presuntivo */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-black uppercase text-slate-700 dark:text-slate-200 mb-1">
-                      Diagnóstico Orientativo / Presuntivo (CIE-10):
+                    <label className="block text-xs font-bold uppercase text-slate-700 dark:text-slate-200 mb-1">
+                      Diagnóstico Orientativo (CIE-10):
                     </label>
                     <input
                       type="text"
                       value={diagnosticoPresuntivo}
                       onChange={(e) => setDiagnosticoPresuntivo(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-navy-900 border border-slate-300 dark:border-navy-700 outline-none focus:border-indigo-500 font-semibold"
+                      className="w-full px-3 py-1.5 text-xs rounded-lg bg-slate-50 dark:bg-navy-900 border border-slate-300 dark:border-navy-700 outline-none focus:border-slate-600"
                     />
                   </div>
 
-                  {/* Prioridad */}
                   <div>
-                    <label className="block text-xs font-black uppercase text-slate-700 dark:text-slate-200 mb-1">
-                      Prioridad de Atención:
+                    <label className="block text-xs font-bold uppercase text-slate-700 dark:text-slate-200 mb-1">
+                      Prioridad:
                     </label>
                     <select
                       value={prioridad}
                       onChange={(e: any) => setPrioridad(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-navy-900 border border-slate-300 dark:border-navy-700 outline-none focus:border-indigo-500 font-bold"
+                      className="w-full px-3 py-1.5 text-xs rounded-lg bg-slate-50 dark:bg-navy-900 border border-slate-300 dark:border-navy-700 outline-none focus:border-slate-600 font-medium"
                     >
-                      <option value="normal">Normal (Estudios de rutina)</option>
-                      <option value="preferente">Preferente (Próxima consulta programada)</option>
-                      <option value="urgente">Urgente (Sintomatología aguda)</option>
+                      <option value="normal">Normal (Rutina)</option>
+                      <option value="preferente">Preferente</option>
+                      <option value="urgente">Urgente</option>
                     </select>
                   </div>
                 </div>
 
-                {/* Indicaciones pre-analíticas */}
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-black uppercase text-slate-700 dark:text-slate-200">
-                      Indicaciones de Preparación para la Paciente:
+                    <label className="block text-xs font-bold uppercase text-slate-700 dark:text-slate-200">
+                      Indicaciones de Preparación:
                     </label>
                     <span className="text-[10px] text-slate-400">
-                      Se incluirán en el volante impreso para el laboratorio
+                      Instrucciones preanalíticas para la paciente
                     </span>
                   </div>
                   <textarea
                     rows={3}
                     value={indicacionesPreanaliticas}
                     onChange={(e) => setIndicacionesPreanaliticas(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-navy-900 border border-slate-300 dark:border-navy-700 outline-none focus:border-indigo-500 leading-relaxed font-medium"
-                    placeholder="Ayuno, días del ciclo menstrual, preparación vejiga de agua..."
+                    className="w-full px-3 py-1.5 text-xs rounded-lg bg-slate-50 dark:bg-navy-900 border border-slate-300 dark:border-navy-700 outline-none focus:border-slate-600 leading-relaxed font-mono"
+                    placeholder="Ayuno, días del ciclo, hidratación..."
                   />
                 </div>
               </div>
             </>
           ) : (
             /* ── PESTAÑA HISTORIAL DE ÓRDENES MÉDICAS ── */
-            <div className="space-y-4">
+            <div className="space-y-3">
               {cargandoHistorial ? (
-                <div className="py-12 text-center text-xs font-bold text-slate-400 animate-pulse">
-                  Cargando órdenes médicas previas...
+                <div className="py-10 text-center text-xs font-semibold text-slate-400 animate-pulse">
+                  Cargando órdenes médicas...
                 </div>
               ) : historialOrdenes.length === 0 ? (
-                <div className="py-12 text-center space-y-2 border-2 border-dashed border-slate-200 dark:border-navy-700 rounded-2xl">
-                  <span className="text-3xl">📋</span>
-                  <p className="text-xs font-bold text-slate-500">
-                    Aún no se han emitido órdenes médicas para esta paciente.
+                <div className="py-10 text-center space-y-2 border border-dashed border-slate-300 dark:border-navy-700 rounded-xl">
+                  <p className="text-xs font-medium text-slate-500">
+                    No se han registrado órdenes médicas previas para esta paciente.
                   </p>
                   <button
                     type="button"
                     onClick={() => setTab("nueva")}
-                    className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 transition"
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 text-white font-semibold text-xs hover:bg-slate-900 transition"
                   >
-                    Crear primera orden médica
+                    Crear primera orden
                   </button>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   {historialOrdenes.map((orden) => (
                     <div
                       key={orden.id}
-                      className="p-4 rounded-2xl bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-700 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3 hover:border-indigo-300 transition"
+                      className="p-3.5 rounded-xl bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-700 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 hover:border-slate-400 transition"
                     >
                       <div className="space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-indigo-100 text-indigo-800">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-100 text-slate-800 border border-slate-300">
                             Orden #{orden.id.slice(0, 8).toUpperCase()}
                           </span>
                           <span className="text-xs text-slate-400">
@@ -776,24 +809,18 @@ export const ModalOrdenMedica: React.FC<ModalOrdenMedicaProps> = ({
                               minute: "2-digit",
                             })}
                           </span>
-                          <span
-                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
-                              orden.estado === "vigente"
-                                ? "bg-emerald-100 text-emerald-800"
-                                : "bg-rose-100 text-rose-800"
-                            }`}
-                          >
+                          <span className="px-2 py-0.5 rounded text-[10px] font-medium uppercase bg-slate-100 text-slate-700 border border-slate-200">
                             {orden.estado}
                           </span>
                         </div>
 
-                        <div className="text-xs font-bold text-slate-800 dark:text-white">
-                          Ecografía: <span className="font-semibold text-purple-700 dark:text-purple-400 capitalize">{orden.tipo_ecografia.replace("_", " ")}</span> •{" "}
-                          Laboratorio: <span className="font-semibold text-indigo-700 dark:text-indigo-400">{orden.examenes_laboratorio.length} exámenes solicitados</span>
+                        <div className="text-xs text-slate-800 dark:text-white">
+                          Ecografía: <span className="font-semibold capitalize">{orden.tipo_ecografia.replace("_", " ")}</span> •{" "}
+                          Laboratorio: <span className="font-semibold">{orden.examenes_laboratorio.length} exámenes</span>
                         </div>
 
                         <p className="text-[11px] text-slate-500 line-clamp-1">
-                          Dx: {orden.diagnostico_presuntivo}
+                          {orden.diagnostico_presuntivo}
                         </p>
                       </div>
 
@@ -801,9 +828,9 @@ export const ModalOrdenMedica: React.FC<ModalOrdenMedicaProps> = ({
                         <button
                           type="button"
                           onClick={() => handleImprimir(orden)}
-                          className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs flex items-center gap-1.5 transition shadow-sm"
+                          className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs flex items-center gap-1.5 transition"
                         >
-                          <MdPrint size={15} /> Imprimir Volante
+                          <MdPictureAsPdf size={14} /> Imprimir / PDF
                         </button>
                       </div>
                     </div>
@@ -815,149 +842,39 @@ export const ModalOrdenMedica: React.FC<ModalOrdenMedicaProps> = ({
         </div>
 
         {/* ── FOOTER CON ACCIONES ── */}
-        <div className="px-6 py-4 bg-slate-50 dark:bg-navy-900 border-t border-slate-200 dark:border-navy-700 flex flex-wrap items-center justify-between gap-3 shrink-0">
+        <div className="px-6 py-3 bg-slate-50 dark:bg-navy-900 border-t border-slate-200 dark:border-navy-700 flex flex-wrap items-center justify-between gap-3 shrink-0">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-navy-700 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 transition"
+            className="px-3.5 py-2 rounded-lg border border-slate-300 dark:border-navy-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 transition"
           >
             Cerrar
           </button>
 
           {tab === "nueva" && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
-                onClick={handleGuardarOrden}
+                onClick={() => handleGuardarOrden(false)}
                 disabled={guardando}
-                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs uppercase tracking-wider flex items-center gap-2 shadow-md transition disabled:opacity-50"
+                className="px-3.5 py-2 rounded-lg border border-slate-300 dark:border-navy-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-navy-800 font-semibold text-xs uppercase tracking-wider flex items-center gap-1.5 transition disabled:opacity-50"
               >
-                <MdAssignment size={16} />
-                {guardando ? "Emitiendo Orden..." : "Emitir y Guardar Orden Médica"}
+                <MdAssignment size={15} />
+                {guardando ? "Guardando..." : "Solo Guardar"}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleGuardarOrden(true)}
+                disabled={guardando}
+                className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 transition disabled:opacity-50 shadow-sm"
+              >
+                <MdPictureAsPdf size={15} />
+                {guardando ? "Generando..." : "Emitir y Generar PDF / Imprimir"}
               </button>
             </div>
           )}
         </div>
       </div>
-
-      {/* ── HOJA OFICIAL DE IMPRESIÓN (SOLO VISIBLE AL IMPRIMIR) ── */}
-      {ordenActivaImprimir && (
-        <div id="hoja-orden-medica" className="hidden print:block fixed inset-0 bg-white text-black p-8 font-serif z-[99999]">
-          <style>{`
-            @media print {
-              body * { visibility: hidden !important; }
-              #hoja-orden-medica, #hoja-orden-medica * { visibility: visible !important; }
-              #hoja-orden-medica { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 20mm; }
-            }
-          `}</style>
-
-          {/* Encabezado Institucional */}
-          <div className="border-b-2 border-black pb-4 mb-6 flex justify-between items-start">
-            <div>
-              <h1 className="text-xl font-bold uppercase tracking-wider">
-                Centro Médico de Especialidad en Ginecología y Endocrinología
-              </h1>
-              <p className="text-xs text-slate-600 italic">
-                Unidad de Diagnóstico y Tratamiento del Síndrome de Ovario Poliquístico (Rotterdam)
-              </p>
-              <p className="text-xs text-slate-600">
-                Dr. Rodrigo Espinoza Iturri — Mat. Prof. MP-49201-LP
-              </p>
-            </div>
-            <div className="text-right">
-              <span className="inline-block border border-black px-3 py-1 font-mono text-xs font-bold">
-                ORDEN #{ordenActivaImprimir.id.slice(0, 8).toUpperCase()}
-              </span>
-              <p className="text-xs mt-1">
-                Fecha: {new Date(ordenActivaImprimir.fecha_emision).toLocaleDateString("es-ES")}
-              </p>
-            </div>
-          </div>
-
-          <h2 className="text-center text-base font-bold uppercase underline tracking-wide mb-6">
-            SOLICITUD DE EXÁMENES DE LABORATORIO E IMAGENOLOGÍA
-          </h2>
-
-          {/* Datos de la Paciente */}
-          <div className="border border-black p-3 mb-6 text-xs grid grid-cols-2 gap-2">
-            <div>
-              <strong>Paciente: </strong> {ordenActivaImprimir.paciente_nombre}
-            </div>
-            <div>
-              <strong>Cédula de Identidad: </strong> {ordenActivaImprimir.paciente_ci || "—"}
-            </div>
-            <div>
-              <strong>Diagnóstico Orientativo: </strong> {ordenActivaImprimir.diagnostico_presuntivo}
-            </div>
-            <div>
-              <strong>Prioridad: </strong> <span className="uppercase font-bold">{ordenActivaImprimir.prioridad}</span>
-            </div>
-          </div>
-
-          {/* 1. Estudio de Imagenología */}
-          {ordenActivaImprimir.tipo_ecografia !== "ninguna" && (
-            <div className="mb-6">
-              <h3 className="font-bold text-xs uppercase border-b border-black pb-1 mb-2">
-                1. Estudio Ecográfico Ovárico (Criterio 3 de Rotterdam):
-              </h3>
-              <div className="pl-4 text-xs">
-                <p>
-                  <strong>Modalidad Solicitada: </strong>
-                  {ordenActivaImprimir.tipo_ecografia === "transvaginal"
-                    ? "Ecografía Transvaginal de Alta Resolución (Gold Standard)"
-                    : ordenActivaImprimir.tipo_ecografia === "pelvica_abdominal"
-                    ? "Ecografía Pélvica / Abdominal Ginecológica (Con preparación de vejiga llena)"
-                    : "Ecografía Doppler Ovárico Color"}
-                </p>
-                {ordenActivaImprimir.indicacion_ecografia && (
-                  <p className="mt-1 italic text-slate-700">
-                    <strong>Indicación médica: </strong> {ordenActivaImprimir.indicacion_ecografia}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* 2. Análisis de Laboratorio Solicitados */}
-          {ordenActivaImprimir.examenes_laboratorio.length > 0 && (
-            <div className="mb-6">
-              <h3 className="font-bold text-xs uppercase border-b border-black pb-1 mb-2">
-                2. Exámenes de Laboratorio Solicitados:
-              </h3>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 pl-4 text-xs">
-                {ordenActivaImprimir.examenes_laboratorio.map((e, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <span className="w-3.5 h-3.5 border border-black inline-block text-center leading-none text-[9px] font-bold">
-                      ✓
-                    </span>
-                    <span>{e.nombre}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 3. Indicaciones para la Paciente */}
-          {ordenActivaImprimir.indicaciones_preanaliticas && (
-            <div className="mb-8 border border-dashed border-black p-3 text-xs bg-slate-50">
-              <strong className="block uppercase mb-1">Indicaciones Pre-analíticas de Preparación:</strong>
-              <p className="whitespace-pre-line leading-relaxed">
-                {ordenActivaImprimir.indicaciones_preanaliticas}
-              </p>
-            </div>
-          )}
-
-          {/* Pie de Firma Médica */}
-          <div className="mt-16 flex justify-end">
-            <div className="text-center w-64 border-t border-black pt-2 text-xs">
-              <strong>{ordenActivaImprimir.medico_nombre}</strong>
-              <p>{ordenActivaImprimir.medico_especialidad}</p>
-              <p className="font-mono text-[10px]">{ordenActivaImprimir.medico_matricula}</p>
-              <p className="text-[10px] text-slate-500 mt-2">Firma y Sello del Médico Especialista</p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
