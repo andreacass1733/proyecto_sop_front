@@ -36,6 +36,10 @@ export const authFetch = async (
     headers.set("Authorization", `Bearer ${token}`);
   }
 
+  if (options.body && !(options.body instanceof FormData) && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
   const response = await fetch(url, {
     ...options,
     headers,
@@ -1076,11 +1080,22 @@ export interface OrdenMedicaOut {
 export const emitirOrdenMedica = async (orden: OrdenMedicaCreate): Promise<OrdenMedicaOut> => {
   const res = await authFetch("/ordenes-medicas/", {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(orden),
   });
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.detail || "Error al emitir orden médica");
+    let msg = "Error al emitir orden médica";
+    if (typeof errorData.detail === "string") {
+      msg = errorData.detail;
+    } else if (Array.isArray(errorData.detail)) {
+      msg = errorData.detail.map((d: any) => d.msg || (typeof d === "string" ? d : JSON.stringify(d))).join("; ");
+    } else if (errorData.detail && typeof errorData.detail === "object") {
+      msg = errorData.detail.msg || JSON.stringify(errorData.detail);
+    } else if (errorData.message) {
+      msg = errorData.message;
+    }
+    throw new Error(msg);
   }
   return res.json();
 };

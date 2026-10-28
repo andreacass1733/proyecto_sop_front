@@ -21,6 +21,7 @@ import ModalFerrimanGallwey from "./components/ModalFerrimanGallwey";
 import ModalCurvaCTOG from "./components/ModalCurvaCTOG";
 import ModalOrdenMedica from "./components/ModalOrdenMedica";
 import { ModalMetricasXGBoostClinico } from "./components/ModalMetricasXGBoostClinico";
+import { getActivePatientId, setActivePatientId } from "utils/activePatient";
 import {
   guardarDatosHormonales,
   obtenerUltimosDatosHormonalesPaciente,
@@ -128,7 +129,7 @@ export default function EvaluacionClinicaView() {
 
   // Pacientes
   const [pacientes, setPacientes] = useState<PacienteListItem[]>([]);
-  const [pacienteId, setPacienteId] = useState<string>(searchParams.get("pacienteId") || "");
+  const [pacienteId, setPacienteId] = useState<string>(searchParams.get("pacienteId") || getActivePatientId() || "");
   const [busquedaPaciente, setBusquedaPaciente] = useState<string>("");
   const [dropdownPacienteAbierto, setDropdownPacienteAbierto] = useState<boolean>(false);
 
@@ -493,6 +494,17 @@ export default function EvaluacionClinicaView() {
     return () => {
       cancel = true;
     };
+  }, [pacienteId]);
+
+  useEffect(() => {
+    const onPatientChanged = (e: any) => {
+      const newId = e.detail?.pacienteId;
+      if (newId && newId !== pacienteId) {
+        setPacienteId(newId);
+      }
+    };
+    window.addEventListener("sop_patient_changed", onPatientChanged);
+    return () => window.removeEventListener("sop_patient_changed", onPatientChanged);
   }, [pacienteId]);
 
   // Paciente seleccionado
@@ -886,6 +898,7 @@ export default function EvaluacionClinicaView() {
                   type="button"
                   onClick={() => {
                     setPacienteId(p.id);
+                    setActivePatientId(p.id);
                     setDropdownPacienteAbierto(false);
                   }}
                   className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between ${
