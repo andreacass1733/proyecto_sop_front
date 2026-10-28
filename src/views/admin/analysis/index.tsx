@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import {
   MdUpload, MdWarning, MdCheckCircle,
   MdCancel, MdOutlineAnalytics, MdCenterFocusStrong, MdPerson, MdDelete, MdLayers,
-  MdSearch, MdCompare, MdZoomIn, MdZoomOut, MdRestartAlt, MdClose, MdPrint, MdHistory, MdArrowForward,
-  MdCheck, MdOpenInNew, MdRefresh, MdInfoOutline
+  MdSearch, MdCompare, MdZoomIn, MdZoomOut, MdRestartAlt, MdClose, MdHistory,
+  MdCheck, MdInfoOutline
 } from "react-icons/md";
 import {
   predecirImagen,
@@ -15,6 +15,7 @@ import {
   PacienteListItem,
   EstudioEcograficoItem,
 } from "services/api";
+import { getActivePatientId, setActivePatientId } from "utils/activePatient";
 
 // ── Formatear Fechas ────────────────────────────────────────────────────────
 function formatearFecha(iso?: string | null): string {
@@ -80,11 +81,10 @@ const ProbBar = ({
 // ── Componente Principal ────────────────────────────────────────────────────
 const Analysis = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
 
   // Pacientes
   const [pacientes, setPacientes] = useState<PacienteListItem[]>([]);
-  const [pacienteId, setPacienteId] = useState<string>("");
+  const [pacienteId, setPacienteId] = useState<string>(searchParams.get("pacienteId") || getActivePatientId() || "");
   const [busquedaPaciente, setBusquedaPaciente] = useState<string>("");
   const [dropdownPacienteAbierto, setDropdownPacienteAbierto] = useState<boolean>(false);
 
@@ -149,13 +149,24 @@ const Analysis = () => {
     cargar();
   }, []);
 
-  // Leer parámetros de URL si viene desde el perfil del paciente
+  // Leer parámetros de URL o eventos si viene desde el perfil del paciente
   useEffect(() => {
-    const pId = searchParams.get("pacienteId");
+    const pId = searchParams.get("pacienteId") || getActivePatientId();
     if (pId) {
       setPacienteId(pId);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    const onPatientChanged = (e: any) => {
+      const newId = e.detail?.pacienteId;
+      if (newId && newId !== pacienteId) {
+        setPacienteId(newId);
+      }
+    };
+    window.addEventListener("sop_patient_changed", onPatientChanged);
+    return () => window.removeEventListener("sop_patient_changed", onPatientChanged);
+  }, [pacienteId]);
 
   // Paciente seleccionado actual
   const pacienteSeleccionado = useMemo(() => {
@@ -363,6 +374,7 @@ const Analysis = () => {
                       key={p.id}
                       onClick={() => {
                         setPacienteId(p.id);
+                        setActivePatientId(p.id);
                         setSearchParams({ pacienteId: p.id });
                         setDropdownPacienteAbierto(false);
                         setBusquedaPaciente("");

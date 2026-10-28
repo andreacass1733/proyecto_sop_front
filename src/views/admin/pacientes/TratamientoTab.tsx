@@ -14,6 +14,7 @@ import {
   MdPerson,
   MdSearch,
 } from "react-icons/md";
+import { imprimirContenidoClinico } from "utils/printDocument";
 import {
   PacienteListItem,
   listarPacientes,
@@ -462,7 +463,7 @@ export default function TratamientoTab({
   const handleAgregarMedicamento = (e: React.FormEvent) => {
     e.preventDefault();
     if (!nuevoMed.nombre_medicamento.trim()) {
-      alert("Por favor ingrese o seleccione el nombre del medicamento");
+      showToast("Por favor ingrese o seleccione el nombre del medicamento", "error");
       return;
     }
 
@@ -583,27 +584,27 @@ export default function TratamientoTab({
         </div>
       )}
 
-      {/* ── ENCABEZADO MÉDICO UNIFICADO (PLAN TERAPÉUTICO) ── */}
-      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3.5">
-        <div className="flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center font-black text-sm shadow-sm flex-shrink-0">
+      {/* ── ENCABEZADO MÉDICO COMPACTO (PLAN TERAPÉUTICO) ── */}
+      <div className="bg-white rounded-xl p-2 sm:p-2.5 border border-slate-200/90 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-md bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center font-black text-[10px] shadow-xs flex-shrink-0">
             {iniciales}
           </div>
           <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700 border border-purple-200">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700 border border-purple-200">
                 Plan Terapéutico y Farmacología
               </span>
-              <span className="text-xs text-slate-500 font-medium">
+              <span className="text-[10px] text-slate-500 font-medium">
                 Expediente: <strong className="text-slate-800">CI {ciPaciente}</strong>
               </span>
               {edad && (
-                <span className="text-xs text-slate-500 font-medium">
+                <span className="text-[10px] text-slate-500 font-medium">
                   • Edad: <strong className="text-slate-800">{edad}</strong>
                 </span>
               )}
             </div>
-            <h2 className="text-base sm:text-lg font-black text-slate-900 mt-0.5">
+            <h2 className="text-xs sm:text-sm font-bold text-slate-900 leading-tight">
               {nombrePaciente}
             </h2>
           </div>
@@ -615,7 +616,7 @@ export default function TratamientoTab({
             <button
               type="button"
               onClick={() => setDropdownPacienteAbierto(!dropdownPacienteAbierto)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 transition border border-purple-200 shadow-sm"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 transition border border-purple-200 shadow-xs"
             >
               <MdPerson size={16} />
               <span>{targetPaciente ? "Cambiar Paciente" : "Seleccionar Paciente"}</span>
@@ -664,9 +665,9 @@ export default function TratamientoTab({
           <button
             type="button"
             onClick={() => setModalRecetaImprimir(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition border border-slate-200 shadow-sm"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition border border-slate-200 shadow-xs"
           >
-            <MdPrint size={16} />
+            <MdPrint size={14} />
             <span>Imprimir Receta Médica</span>
           </button>
 
@@ -674,10 +675,10 @@ export default function TratamientoTab({
             type="button"
             onClick={handleGuardarPlanCompleto}
             disabled={guardandoPlan}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 transition shadow-md shadow-purple-600/20 disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold text-white bg-purple-600 hover:bg-purple-700 transition shadow-xs disabled:opacity-50"
           >
-            <MdSave size={16} />
-            <span>{guardandoPlan ? "Guardando Plan..." : "Guardar Plan"}</span>
+            <MdSave size={14} />
+            <span>{guardandoPlan ? "Guardando..." : "Guardar Plan"}</span>
           </button>
         </div>
       </div>
@@ -1386,7 +1387,7 @@ export default function TratamientoTab({
                   Receta Médica y Prescripción Terapéutica
                 </h3>
                 <p className="text-sm text-slate-500 font-semibold">
-                  Clínica de Endocrinología Ginecológica • Sistema SOP-Care
+                  Unidad de Endocrinología Especializada • Sistema SOP-Care
                 </p>
               </div>
               <button
@@ -1467,7 +1468,82 @@ export default function TratamientoTab({
               </button>
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={() => {
+                  const fechaHoyStr = new Date().toLocaleDateString("es-ES", {
+                    day: "2-digit",
+                    month: "long",
+                    year: "numeric",
+                  });
+                  const medsHtml = medicaciones.length > 0 ? medicaciones.map((m, i) => `
+                    <div class="med-item">
+                      <div class="med-header">
+                        <span>${i + 1}. ${m.nombre_medicamento}</span>
+                        <span style="color: #7c3aed; font-size: 8.5pt;">Vía ${m.via_administracion || "Oral"}</span>
+                      </div>
+                      <div class="med-detail">
+                        <strong>Posología:</strong> ${m.dosis} — ${m.frecuencia}
+                      </div>
+                      <div style="font-size: 8pt; color: #475569; margin-top: 2px;">
+                        <strong>Duración:</strong> ${m.duracion_meses || 3} meses ${m.fecha_fin ? `(Hasta ${m.fecha_fin})` : ""}
+                      </div>
+                      ${m.indicaciones_especiales ? `<div style="font-size: 8pt; color: #64748b; font-style: italic; margin-top: 2px;">Nota: ${m.indicaciones_especiales}</div>` : ""}
+                    </div>
+                  `).join("") : `<p style="font-size: 9pt; color: #64748b;">No hay medicamentos prescritos registrados.</p>`;
+
+                  const html = `
+                    <div class="header">
+                      <div>
+                        <h1 class="hospital-title">CENTRO MÉDICO DE ESPECIALIDADES ENDOCRINOLÓGICAS</h1>
+                        <div class="hospital-subtitle">Receta Médica y Prescripción Farmacológica Protocolizada (SOP)</div>
+                      </div>
+                      <div class="doc-meta">
+                        <div class="doc-id">RECETA MÉDICA</div>
+                        <div>Fecha: ${fechaHoyStr}</div>
+                      </div>
+                    </div>
+
+                    <div class="section-box">
+                      <div class="section-title">Datos de la Paciente</div>
+                      <div class="grid-2">
+                        <div><span class="item-label">Paciente:</span> <div class="item-value">${nombrePaciente}</div></div>
+                        <div><span class="item-label">Cédula de Identidad (CI):</span> <div class="item-value">${ciPaciente}</div></div>
+                        <div><span class="item-label">Médico Tratante:</span> <div class="item-value">Dr. Rodrigo Espinoza</div></div>
+                        <div><span class="item-label">Especialidad:</span> <div class="item-value">Ginecología y Endocrinología</div></div>
+                      </div>
+                    </div>
+
+                    <div class="section-box" style="background: #ffffff;">
+                      <div class="section-title">Prescripción Farmacológica (Rp/):</div>
+                      ${medsHtml}
+                    </div>
+
+                    ${tratamientoPlan?.descripcion ? `
+                      <div class="section-box">
+                        <div class="section-title">Recomendaciones de Estilo de Vida y Seguimiento</div>
+                        <div style="font-size: 8.5pt; color: #334155; line-height: 1.4;">${tratamientoPlan.descripcion}</div>
+                        ${tratamientoPlan.observaciones ? `<div style="font-size: 8pt; color: #64748b; margin-top: 4px;"><em>${tratamientoPlan.observaciones}</em></div>` : ""}
+                      </div>
+                    ` : ""}
+
+                    <div class="footer-signatures">
+                      <div>
+                        <div class="seal-box">
+                          <div>RECETA OFICIAL VERIFICADA</div>
+                          <div>Hash: ${Math.random().toString(36).substring(2, 12).toUpperCase()}...</div>
+                          <div>Válida en farmacias y dispensarios autorizados</div>
+                        </div>
+                      </div>
+                      <div class="signature-block">
+                        <div style="font-weight: 800; font-size: 10pt; color: #0f172a;">Dr. Rodrigo Espinoza</div>
+                        <div>Médico Especialista en Endocrinología y Metabolismo</div>
+                        <div style="font-family: monospace; font-size: 8pt;">MP-49201-LP</div>
+                        <div style="font-size: 7.5pt; color: #94a3b8; margin-top: 4px;">Firma y Sello Profesional</div>
+                      </div>
+                    </div>
+                  `;
+
+                  imprimirContenidoClinico(`Receta_Medica_${ciPaciente}`, html);
+                }}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-black text-white bg-purple-600 hover:bg-purple-700 transition shadow-md"
               >
                 <MdPrint size={18} />

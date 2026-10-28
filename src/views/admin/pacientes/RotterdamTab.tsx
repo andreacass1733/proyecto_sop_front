@@ -240,7 +240,7 @@ export default function RotterdamTab({
     const pId = targetPaciente?.id;
     if (!pId) return;
     if (!justificacionMedica.trim()) {
-      alert("Debe ingresar la justificación clínica obligatoria para rectificar el fenotipo.");
+      showToast("Debe ingresar la justificación clínica obligatoria para rectificar el fenotipo.", "error");
       return;
     }
 

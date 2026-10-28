@@ -4,12 +4,13 @@ import {
   MdSave, MdCheckCircle,
   MdWarning, MdInfo, MdFemale, MdOutlineBiotech, MdFamilyRestroom,
   MdShield, MdOutlineAssignment, MdCheck, MdClose,
-  MdLock, MdLockOpen, MdMedication, MdPrint, MdPerson, MdSearch
+  MdLock, MdLockOpen, MdMedication, MdPerson, MdSearch
 } from "react-icons/md";
 import {
   obtenerPaciente, obtenerAntecedentes, guardarAntecedentes,
   listarPacientes, PacienteOut, PacienteListItem
 } from "services/api";
+import { getActivePatientId, setActivePatientId } from "utils/activePatient";
 import ModalOrdenMedica from "views/admin/evaluacion-clinica/components/ModalOrdenMedica";
 
 export const OPCIONES_ANTICONCEPTIVOS = [
@@ -44,7 +45,7 @@ export default function DetallePaciente({
   onSelectPaciente?: (p: PacienteListItem) => void;
 } = {}) {
   const { id: idParam } = useParams<{ id: string }>();
-  const id = pacienteIdProp || idParam;
+  const id = pacienteIdProp || idParam || getActivePatientId() || "";
   const navigate = useNavigate();
 
   const [paciente, setPaciente]         = useState<PacienteOut | null>(null);
@@ -310,30 +311,30 @@ export default function DetallePaciente({
       {!loading && paciente && (
         <div className="space-y-6">
 
-          {/* ── ENCABEZADO MÉDICO UNIFICADO (ANTECEDENTES CLÍNICOS) ── */}
-          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3.5">
-            <div className="flex items-center gap-3.5">
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center font-black text-sm shadow-sm flex-shrink-0">
+          {/* ── ENCABEZADO MÉDICO COMPACTO (ANTECEDENTES CLÍNICOS) ── */}
+          <div className="bg-white rounded-2xl p-3 sm:p-3.5 border border-slate-200/90 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center font-black text-xs shadow-xs flex-shrink-0">
                 {paciente.nombre.charAt(0)}{paciente.primer_apellido.charAt(0)}
               </div>
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700 border border-purple-200">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700 border border-purple-200">
                     Antecedentes Clínicos
                   </span>
-                  <span className="text-xs text-slate-500 font-medium">
+                  <span className="text-[11px] text-slate-500 font-medium">
                     Expediente: <strong className="text-slate-800">CI {paciente.ci || "Sin CI"}</strong>
                   </span>
-                  <span className="text-xs text-slate-500 font-medium">
+                  <span className="text-[11px] text-slate-500 font-medium">
                     • Edad: <strong className="text-slate-800">{calcularEdad(paciente.fecha_nacimiento)}</strong>
                   </span>
                   {paciente.telefono && (
-                    <span className="text-xs text-slate-500 font-medium hidden sm:inline">
+                    <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">
                       • Tel: <strong className="text-slate-800">{paciente.telefono}</strong>
                     </span>
                   )}
                 </div>
-                <h2 className="text-base sm:text-lg font-black text-slate-900 mt-0.5">
+                <h2 className="text-sm sm:text-base font-extrabold text-slate-900">
                   {nombreCompleto}
                 </h2>
               </div>
@@ -379,6 +380,7 @@ export default function DetallePaciente({
                           key={p.id}
                           type="button"
                           onClick={() => {
+                            setActivePatientId(p.id);
                             if (onSelectPaciente) {
                               onSelectPaciente(p);
                             } else {
@@ -409,14 +411,6 @@ export default function DetallePaciente({
                 <span>Órdenes Médicas</span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition border border-slate-200 shadow-sm"
-              >
-                <MdPrint size={16} />
-                <span>Imprimir Ficha</span>
-              </button>
               <button
                 type="submit"
                 form="form-antecedentes"
