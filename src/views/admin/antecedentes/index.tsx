@@ -212,9 +212,39 @@ export default function AntecedentesView() {
     showToast("Modo corrección aplicado: Sexarca cambiada a 'No'", "ok");
   };
 
+  const [errorObstetrico, setErrorObstetrico] = useState<string | null>(null);
+
+  const incoherenciaObstetrica = Boolean(
+    form.iniciada_vida_sexual &&
+    ((Number(form.partos || 0) + Number(form.cesareas || 0)) > Number(form.gestas || 0) ||
+     (Number(form.partos || 0) + Number(form.cesareas || 0) + Number(form.abortos || 0)) > Number(form.gestas || 0))
+  );
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pacienteSeleccionado) return;
+
+    const gestasNum = form.iniciada_vida_sexual ? Number(form.gestas || 0) : 0;
+    const partosNum = form.iniciada_vida_sexual ? Number(form.partos || 0) : 0;
+    const cesareasNum = form.iniciada_vida_sexual ? Number(form.cesareas || 0) : 0;
+    const abortosNum = form.iniciada_vida_sexual ? Number(form.abortos || 0) : 0;
+
+    if (form.iniciada_vida_sexual) {
+      if ((partosNum + cesareasNum) > gestasNum) {
+        const errorMsg = "Incoherencia obstétrica: El número de gestas debe ser mayor o igual a la suma de partos y cesáreas.";
+        setErrorObstetrico(errorMsg);
+        showToast(errorMsg, "error");
+        return;
+      }
+      if ((partosNum + cesareasNum + abortosNum) > gestasNum) {
+        const errorMsg = "Incoherencia obstétrica: El número de gestas debe ser mayor o igual a la suma de partos, cesáreas y abortos.";
+        setErrorObstetrico(errorMsg);
+        showToast(errorMsg, "error");
+        return;
+      }
+    }
+    setErrorObstetrico(null);
+
     setSaving(true);
     try {
       const payload: any = {
@@ -222,10 +252,10 @@ export default function AntecedentesView() {
         edad_menarquia: form.edad_menarquia === "" ? null : Number(form.edad_menarquia),
         tipo_ciclo: form.tipo_ciclo,
         duracion_ciclo_habitual: form.duracion_ciclo_habitual === "" ? null : Number(form.duracion_ciclo_habitual),
-        gestas: form.iniciada_vida_sexual ? Number(form.gestas) : 0,
-        partos: form.iniciada_vida_sexual ? Number(form.partos) : 0,
-        cesareas: form.iniciada_vida_sexual ? Number(form.cesareas) : 0,
-        abortos: form.iniciada_vida_sexual ? Number(form.abortos) : 0,
+        gestas: gestasNum,
+        partos: partosNum,
+        cesareas: cesareasNum,
+        abortos: abortosNum,
         hijos_vivos: form.iniciada_vida_sexual ? Number(form.hijos_vivos) : 0,
         usa_anticonceptivos: form.usa_anticonceptivos,
         tipo_anticonceptivo: form.usa_anticonceptivos ? (form.tipo_anticonceptivo || null) : null,
@@ -610,6 +640,20 @@ export default function AntecedentesView() {
                     <p className="text-xs text-gray-500 dark:text-gray-400">Información clínica para pacientes con sexarca activa</p>
                   </div>
                 </div>
+
+                {/* ALERTA DE INCOHERENCIA OBSTÉTRICA */}
+                {(errorObstetrico || incoherenciaObstetrica) && (
+                  <div className="p-4 bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-500 dark:border-rose-600 rounded-2xl text-xs font-bold text-rose-800 dark:text-rose-200 flex items-center gap-3 shadow-sm animate-fade-in">
+                    <div className="w-8 h-8 rounded-xl bg-rose-100 dark:bg-rose-900/60 text-rose-600 flex items-center justify-center flex-shrink-0">
+                      <MdWarning size={20} />
+                    </div>
+                    <span>
+                      {errorObstetrico || ((Number(form.partos || 0) + Number(form.cesareas || 0)) > Number(form.gestas || 0)
+                        ? "Incoherencia obstétrica: El número de gestas debe ser mayor o igual a la suma de partos y cesáreas."
+                        : "Incoherencia obstétrica: El número de gestas debe ser mayor o igual a la suma de partos, cesáreas y abortos.")}
+                    </span>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                   <div>

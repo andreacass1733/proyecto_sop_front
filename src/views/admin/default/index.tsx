@@ -8,6 +8,7 @@ import {
 } from "react-icons/md";
 import {
   listarPacientes,
+  contarPacientes,
   listarConsultas,
   listarCitas,
   obtenerEstadisticasDashboard,
@@ -64,19 +65,33 @@ const MainDashboard = () => {
   const [buscandoPaciente, setBuscandoPaciente] = useState(false);
   const [busquedaRealizada, setBusquedaRealizada] = useState(false);
 
+  const [totalPacientesReal, setTotalPacientesReal] = useState<number>(0);
+  const [totalConsultasReal, setTotalConsultasReal] = useState<number>(0);
+
   const cargarDatosDashboard = async () => {
     try {
       setCargando(true);
-      const [listaPacientes, listaConsultas, listaCitas, estadisticas] = await Promise.all([
+      const [listaPacientes, listaConsultas, listaCitas, estadisticas, totalPacs] = await Promise.all([
         listarPacientes(),
         listarConsultas(),
         listarCitas(),
         obtenerEstadisticasDashboard().catch(() => null),
+        contarPacientes().catch(() => null),
       ]);
       setPacientes(listaPacientes);
       setConsultas(listaConsultas);
       setCitas(listaCitas);
       setStats(estadisticas);
+
+      const pacsCount =
+        estadisticas?.total_pacientes ??
+        (typeof totalPacs === "number" && totalPacs > 0 ? totalPacs : listaPacientes.length);
+      const consCount =
+        estadisticas?.total_consultas ??
+        (listaConsultas.length > 0 ? listaConsultas.length : 0);
+
+      setTotalPacientesReal(pacsCount);
+      setTotalConsultasReal(consCount);
     } catch (err) {
       console.error("Error al cargar datos del dashboard médico:", err);
     } finally {
@@ -112,12 +127,12 @@ const MainDashboard = () => {
     return () => clearTimeout(timer);
   }, [busquedaPaciente]);
 
-  const countPacientes = useCounter(pacientes.length);
-  const countConsultas = useCounter(consultas.length);
+  const countPacientes = useCounter(totalPacientesReal);
+  const countConsultas = useCounter(totalConsultasReal);
 
   // Citas programadas futuras
   const citasProgramadas = citas.filter((c) => c.estado === "programada");
-  const countCitasProgramadas = useCounter(citasProgramadas.length);
+  const countCitasProgramadas = useCounter(stats?.citas_programadas ?? citasProgramadas.length);
 
   // Concordancia IA vs Médico
   const concordanciaVal = stats?.metricas_ia?.concordancia_ia_especialista ?? 95;
@@ -324,9 +339,6 @@ const MainDashboard = () => {
                 <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-rose-200 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200">
                   Fenotipo A
                 </span>
-                <span className="text-xs font-extrabold text-rose-600 dark:text-rose-400">
-                  {stats?.fenotipos?.fenotipo_a?.porcentaje ?? 4.0}%
-                </span>
               </div>
               <h3 className="font-extrabold text-slate-800 dark:text-white text-xs leading-snug">
                 Clásico Completo
@@ -338,7 +350,7 @@ const MainDashboard = () => {
             <div className="mt-4 pt-3 border-t border-rose-200/60 dark:border-rose-900/40 flex items-center justify-between">
               <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Pacientes:</span>
               <strong className="text-lg font-black text-rose-700 dark:text-rose-300">
-                {stats?.fenotipos?.fenotipo_a?.total ?? 1}
+                {stats?.fenotipos?.fenotipo_a?.total ?? 0}
               </strong>
             </div>
           </div>
@@ -349,9 +361,6 @@ const MainDashboard = () => {
               <div className="flex items-center justify-between mb-2">
                 <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-purple-200 text-purple-800 dark:bg-purple-900/60 dark:text-purple-200">
                   Fenotipo B
-                </span>
-                <span className="text-xs font-extrabold text-purple-700 dark:text-purple-300">
-                  {stats?.fenotipos?.fenotipo_b?.porcentaje ?? 24.0}%
                 </span>
               </div>
               <h3 className="font-extrabold text-slate-800 dark:text-white text-xs leading-snug">
@@ -364,7 +373,7 @@ const MainDashboard = () => {
             <div className="mt-4 pt-3 border-t border-purple-200/60 dark:border-purple-900/40 flex items-center justify-between">
               <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Pacientes:</span>
               <strong className="text-lg font-black text-purple-700 dark:text-purple-300">
-                {stats?.fenotipos?.fenotipo_b?.total ?? 6}
+                {stats?.fenotipos?.fenotipo_b?.total ?? 0}
               </strong>
             </div>
           </div>
@@ -375,9 +384,6 @@ const MainDashboard = () => {
               <div className="flex items-center justify-between mb-2">
                 <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-indigo-200 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-200">
                   Fenotipo C
-                </span>
-                <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400">
-                  {stats?.fenotipos?.fenotipo_c?.porcentaje ?? 0.0}%
                 </span>
               </div>
               <h3 className="font-extrabold text-slate-800 dark:text-white text-xs leading-snug">
@@ -402,9 +408,6 @@ const MainDashboard = () => {
                 <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-200 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">
                   Fenotipo D
                 </span>
-                <span className="text-xs font-extrabold text-amber-600 dark:text-amber-400">
-                  {stats?.fenotipos?.fenotipo_d?.porcentaje ?? 0.0}%
-                </span>
               </div>
               <h3 className="font-extrabold text-slate-800 dark:text-white text-xs leading-snug">
                 No Hiperandrogénico
@@ -428,9 +431,6 @@ const MainDashboard = () => {
                 <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-200 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200">
                   Normal
                 </span>
-                <span className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400">
-                  {stats?.fenotipos?.sin_sop?.porcentaje ?? 72.0}%
-                </span>
               </div>
               <h3 className="font-extrabold text-slate-800 dark:text-white text-xs leading-snug">
                 Sin Criterio de SOP
@@ -442,7 +442,7 @@ const MainDashboard = () => {
             <div className="mt-4 pt-3 border-t border-emerald-200/60 dark:border-emerald-900/40 flex items-center justify-between">
               <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Pacientes:</span>
               <strong className="text-lg font-black text-emerald-700 dark:text-emerald-300">
-                {stats?.fenotipos?.sin_sop?.total ?? 18}
+                {stats?.fenotipos?.sin_sop?.total ?? 0}
               </strong>
             </div>
           </div>
@@ -477,13 +477,13 @@ const MainDashboard = () => {
                   Criterio 1: Disfunción Ovulatoria (Oligo/Amenorrea)
                 </span>
                 <span className="font-mono font-bold text-brand-600 dark:text-brand-400">
-                  {stats?.criterios_cumplimiento?.criterio1?.total ?? 7} pacientes ({stats?.criterios_cumplimiento?.criterio1?.porcentaje ?? 28}%)
+                  {stats?.criterios_cumplimiento?.criterio1?.total ?? 0} pacientes
                 </span>
               </div>
               <div className="w-full bg-slate-200 dark:bg-navy-700 rounded-full h-2.5 overflow-hidden">
                 <div
                   className="bg-brand-500 h-2.5 rounded-full transition-all duration-700"
-                  style={{ width: `${stats?.criterios_cumplimiento?.criterio1?.porcentaje ?? 28}%` }}
+                  style={{ width: `${stats?.criterios_cumplimiento?.criterio1?.porcentaje ?? 0}%` }}
                 />
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
@@ -498,13 +498,13 @@ const MainDashboard = () => {
                   Criterio 2: Hiperandrogenismo Clínico / Bioquímico (XGBoost)
                 </span>
                 <span className="font-mono font-bold text-purple-600 dark:text-purple-400">
-                  {stats?.criterios_cumplimiento?.criterio2?.total ?? 15} pacientes ({stats?.criterios_cumplimiento?.criterio2?.porcentaje ?? 60}%)
+                  {stats?.criterios_cumplimiento?.criterio2?.total ?? 0} pacientes
                 </span>
               </div>
               <div className="w-full bg-slate-200 dark:bg-navy-700 rounded-full h-2.5 overflow-hidden">
                 <div
                   className="bg-purple-600 h-2.5 rounded-full transition-all duration-700"
-                  style={{ width: `${stats?.criterios_cumplimiento?.criterio2?.porcentaje ?? 60}%` }}
+                  style={{ width: `${stats?.criterios_cumplimiento?.criterio2?.porcentaje ?? 0}%` }}
                 />
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
@@ -519,13 +519,13 @@ const MainDashboard = () => {
                   Criterio 3: Morfología Ecográfica Poliquística (EfficientNet-B0)
                 </span>
                 <span className="font-mono font-bold text-pink-600 dark:text-pink-400">
-                  {stats?.criterios_cumplimiento?.criterio3?.total ?? 5} pacientes ({stats?.criterios_cumplimiento?.criterio3?.porcentaje ?? 20}%)
+                  {stats?.criterios_cumplimiento?.criterio3?.total ?? 0} pacientes
                 </span>
               </div>
               <div className="w-full bg-slate-200 dark:bg-navy-700 rounded-full h-2.5 overflow-hidden">
                 <div
                   className="bg-pink-500 h-2.5 rounded-full transition-all duration-700"
-                  style={{ width: `${stats?.criterios_cumplimiento?.criterio3?.porcentaje ?? 20}%` }}
+                  style={{ width: `${stats?.criterios_cumplimiento?.criterio3?.porcentaje ?? 0}%` }}
                 />
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">

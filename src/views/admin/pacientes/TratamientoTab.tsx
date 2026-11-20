@@ -505,6 +505,12 @@ export default function TratamientoTab({
       const psNum = vitals.presion_sistolica !== "" ? Number(vitals.presion_sistolica) : undefined;
       const pdNum = vitals.presion_diastolica !== "" ? Number(vitals.presion_diastolica) : undefined;
 
+      if (psNum !== undefined && pdNum !== undefined && psNum <= pdNum) {
+        showToast("La presión sistólica debe ser estrictamente mayor a la diastólica", "error");
+        setGuardandoPlan(false);
+        return;
+      }
+
       if (pNum !== undefined || tNum !== undefined || fcNum !== undefined || psNum !== undefined) {
         try {
           await guardarDatosClinicos({
@@ -896,7 +902,7 @@ export default function TratamientoTab({
                 className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-black text-white bg-purple-600 hover:bg-purple-700 transition shadow-md shadow-purple-600/20 self-start sm:self-auto"
               >
                 <MdAdd size={20} />
-                <span>+ Añadir Medicación</span>
+                <span>Añadir Medicación</span>
               </button>
             </div>
 

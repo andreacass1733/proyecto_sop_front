@@ -18,7 +18,6 @@ import {
   MdShowChart,
 } from "react-icons/md";
 import ModalFerrimanGallwey from "./components/ModalFerrimanGallwey";
-import ModalCurvaCTOG from "./components/ModalCurvaCTOG";
 import ModalOrdenMedica from "./components/ModalOrdenMedica";
 import { ModalMetricasXGBoostClinico } from "./components/ModalMetricasXGBoostClinico";
 import { getActivePatientId, setActivePatientId } from "utils/activePatient";
@@ -230,9 +229,8 @@ export default function EvaluacionClinicaView() {
     showToast("Parámetros del ciclo menstrual sincronizados desde Antecedentes Ginecológicos", "ok");
   };
 
-  // Modales Especializados (Ferriman-Gallwey, Curva CTOG, Métricas XGBoost y Órdenes Médicas)
+  // Modales Especializados (Ferriman-Gallwey, Métricas XGBoost y Órdenes Médicas)
   const [mostrarModalFerriman, setMostrarModalFerriman] = useState(false);
-  const [mostrarModalCTOG, setMostrarModalCTOG] = useState(false);
   const [mostrarModalMetricas, setMostrarModalMetricas] = useState(false);
   const [mostrarModalOrden, setMostrarModalOrden] = useState(false);
 
@@ -273,30 +271,6 @@ export default function EvaluacionClinicaView() {
       `Puntuación Ferriman-Gallwey (${datos.totalScore} pts) registrada con sus 9 cuadrantes en expediente. Hirsutismo: ${
         datos.hirsutismo ? "Positivo (≥ 8 pts)" : "Negativo (< 8 pts)"
       }`,
-      "ok"
-    );
-  };
-
-  // Manejador para guardar datos de la Curva CTOG e Insulina Dinámica
-  const handleGuardarCTOG = (datos: {
-    glucosa0: number;
-    insulina0: number;
-    glucosa60: number;
-    insulina60: number;
-    glucosa120: number;
-    insulina120: number;
-    homaIr: number;
-    quicki: number;
-    matsuda: number;
-    dictamen: string;
-  }) => {
-    setFormHormonal((prev) => ({
-      ...prev,
-      glucosa_basal: datos.glucosa0,
-      insulina_basal: datos.insulina0,
-    }));
-    showToast(
-      `Curva CTOG sincronizada. HOMA-IR: ${datos.homaIr}, Matsuda: ${datos.matsuda}. ${datos.dictamen}`,
       "ok"
     );
   };
@@ -522,12 +496,25 @@ export default function EvaluacionClinicaView() {
     );
   }, [pacientes, busquedaPaciente]);
 
-  // Cálculos Automáticos Hormonales en Vivo (HOMA-IR y LH/FSH)
+  // Cálculos Automáticos Hormonales en Vivo (HOMA-IR, QUICKI y LH/FSH)
   const homaIrCalculado = useMemo(() => {
     const g = parseFloat(String(formHormonal.glucosa_basal));
     const i = parseFloat(String(formHormonal.insulina_basal));
     if (!isNaN(g) && !isNaN(i) && g > 0 && i > 0) {
       return ((g * i) / 405.0).toFixed(2);
+    }
+    return null;
+  }, [formHormonal.glucosa_basal, formHormonal.insulina_basal]);
+
+  const quickiCalculado = useMemo(() => {
+    const g = parseFloat(String(formHormonal.glucosa_basal));
+    const i = parseFloat(String(formHormonal.insulina_basal));
+    if (!isNaN(g) && !isNaN(i) && g > 0 && i > 0) {
+      const logG = Math.log10(g);
+      const logI = Math.log10(i);
+      if (logG + logI > 0) {
+        return (1 / (logG + logI)).toFixed(2);
+      }
     }
     return null;
   }, [formHormonal.glucosa_basal, formHormonal.insulina_basal]);
@@ -573,6 +560,19 @@ export default function EvaluacionClinicaView() {
     }
     return null;
   }, [formClinico.circunferencia_abdominal_cm, formClinico.cadera_cm]);
+
+  const incoherenciaPresion = useMemo(() => {
+    const sis = formClinico.presion_sistolica !== "" && formClinico.presion_sistolica !== undefined && formClinico.presion_sistolica !== null
+      ? Number(formClinico.presion_sistolica)
+      : null;
+    const dia = formClinico.presion_diastolica !== "" && formClinico.presion_diastolica !== undefined && formClinico.presion_diastolica !== null
+      ? Number(formClinico.presion_diastolica)
+      : null;
+    if (sis !== null && dia !== null && !isNaN(sis) && !isNaN(dia)) {
+      return sis <= dia;
+    }
+    return false;
+  }, [formClinico.presion_sistolica, formClinico.presion_diastolica]);
 
   // Función para determinar el semáforo de un campo hormonal
   const getSemaforo = (config: CampoHormonalConfig, valorRaw: any): { estado: "normal" | "alterado" | "vacio"; label: string; color: string } => {
@@ -722,6 +722,10 @@ export default function EvaluacionClinicaView() {
       showToast(errorFerriman, "error");
       return;
     }
+    if (incoherenciaPresion) {
+      showToast("La presión sistólica debe ser estrictamente mayor a la diastólica", "error");
+      return;
+    }
     setGuardandoClinicos(true);
     try {
       const payload: DatosClinicosIn = {
@@ -744,6 +748,10 @@ export default function EvaluacionClinicaView() {
   const handleEjecutarEvaluacion = async () => {
     if (errorFerriman) {
       showToast("Por favor corrija el Score Ferriman-Gallwey antes de evaluar", "error");
+      return;
+    }
+    if (incoherenciaPresion) {
+      showToast("La presión sistólica debe ser estrictamente mayor a la diastólica", "error");
       return;
     }
     const camposConError = Object.keys(erroresHormonales);
@@ -917,7 +925,7 @@ export default function EvaluacionClinicaView() {
       </div>
 
       {/* ── BARRA DE CALCULADORAS CLÍNICAS Y ÓRDENES MÉDICAS ── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Tarjeta Calculadora Ferriman-Gallwey */}
         <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-50 via-indigo-50/50 to-purple-50/30 dark:from-purple-950/40 dark:via-indigo-950/30 dark:to-navy-800 border border-purple-200/90 dark:border-purple-800/60 shadow-2xs flex flex-col justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -939,30 +947,6 @@ export default function EvaluacionClinicaView() {
             className="w-full px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs uppercase tracking-wider shadow-sm transition whitespace-nowrap flex items-center justify-center gap-1.5"
           >
             Abrir Ferriman →
-          </button>
-        </div>
-
-        {/* Tarjeta Curva CTOG e Insulina Dinámica */}
-        <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-50 via-cyan-50/50 to-blue-50/30 dark:from-blue-950/40 dark:via-cyan-950/30 dark:to-navy-800 border border-blue-200/90 dark:border-blue-800/60 shadow-2xs flex flex-col justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-lg shadow-md shadow-blue-500/20 shrink-0">
-              📈
-            </div>
-            <div>
-              <h4 className="text-xs font-black text-blue-950 dark:text-blue-200 uppercase tracking-wider">
-                Curva CTOG e Insulina
-              </h4>
-              <p className="text-[11px] text-blue-700/90 dark:text-blue-300 font-medium">
-                HOMA-IR, QUICKI, Matsuda y gráfico dinámico de doble curva
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => setMostrarModalCTOG(true)}
-            className="w-full px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider shadow-sm transition whitespace-nowrap flex items-center justify-center gap-1.5"
-          >
-            Abrir Curva CTOG →
           </button>
         </div>
 
@@ -1069,7 +1053,7 @@ export default function EvaluacionClinicaView() {
                       : "text-slate-400"
                   }`}
                 >
-                  {lhFshCalculado ? `${lhFshCalculado} ${Number(lhFshCalculado) >= 2.0 ? "(≥2.0 Alterado)" : "(Normal)"}` : "—"}
+                  {lhFshCalculado ? `${lhFshCalculado} ${Number(lhFshCalculado) >= 2.0 ? "(≥2.0 Alterado - Sugestivo SOP)" : "(Normal <2.0)"}` : "—"}
                 </span>
               </div>
 
@@ -1085,7 +1069,7 @@ export default function EvaluacionClinicaView() {
                       : "text-slate-400"
                   }`}
                 >
-                  {homaIrCalculado ? `${homaIrCalculado} ${Number(homaIrCalculado) >= 2.5 ? "(≥2.5 Resistencia Insulina)" : "(Normal)"}` : "—"}
+                  {homaIrCalculado ? `${homaIrCalculado} ${Number(homaIrCalculado) >= 2.5 ? "(≥2.5 Resistencia Insulínica)" : "(Normal <2.5)"}` : "—"}
                 </span>
               </div>
             </div>
@@ -1105,14 +1089,26 @@ export default function EvaluacionClinicaView() {
                       </h3>
                     </div>
                     {grupo === "Metabolismo Glucémico" && (
-                      <button
-                        type="button"
-                        onClick={() => setMostrarModalCTOG(true)}
-                        className="flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800 transition shadow-2xs"
-                      >
-                        <MdShowChart size={15} />
-                        Curva CTOG e Insulina Dinámica (0 - 60 - 120 min)
-                      </button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {homaIrCalculado && (
+                          <span className={`text-[11px] font-black font-mono px-2.5 py-0.5 rounded-lg border ${
+                            Number(homaIrCalculado) >= 2.5
+                              ? "bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950/60 dark:text-rose-400 dark:border-rose-800"
+                              : "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-800"
+                          }`}>
+                            HOMA-IR: {homaIrCalculado} {Number(homaIrCalculado) >= 2.5 ? "(≥2.5 Resistencia)" : "(Normal)"}
+                          </span>
+                        )}
+                        {quickiCalculado && (
+                          <span className={`text-[11px] font-black font-mono px-2.5 py-0.5 rounded-lg border ${
+                            Number(quickiCalculado) <= 0.33
+                              ? "bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800"
+                              : "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-800"
+                          }`}>
+                            QUICKI: {quickiCalculado} {Number(quickiCalculado) <= 0.33 ? "(≤0.33 Alterado)" : "(Normal)"}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
 
@@ -1528,6 +1524,14 @@ export default function EvaluacionClinicaView() {
               </div>
             </div>
 
+            {/* Alerta Incoherencia Hemodinámica - Debajo de todos los campos */}
+            {incoherenciaPresion && (
+              <div className="p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-700 rounded-2xl text-xs font-bold text-rose-700 dark:text-rose-300 flex items-center gap-2.5 animate-fade-in shadow-2xs">
+                <MdWarning className="text-rose-600 shrink-0" size={20} />
+                <span>Alerta clínica obligatoria: &quot;La presión sistólica debe ser estrictamente mayor a la diastólica&quot;</span>
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center gap-4 pt-2">
               <label
                 onClick={() => handleClinicoChange("ganancia_peso", !formClinico.ganancia_peso)}
@@ -1855,17 +1859,6 @@ export default function EvaluacionClinicaView() {
         initialAcne={Boolean(formClinico.acne)}
         initialAlopecia={Boolean(formClinico.alopecia_androgenica)}
         onGuardar={handleGuardarFerriman}
-      />
-
-      {/* ── MODAL CURVA CTOG E INSULINA DINÁMICA (0, 60, 120 MIN) ── */}
-      <ModalCurvaCTOG
-        isOpen={mostrarModalCTOG}
-        onClose={() => setMostrarModalCTOG(false)}
-        pacienteNombre={pacienteSeleccionado ? `${pacienteSeleccionado.nombre} ${pacienteSeleccionado.primer_apellido}` : "Paciente en evaluación"}
-        pacienteCi={pacienteSeleccionado?.ci || ""}
-        initialGlucosa0={formHormonal.glucosa_basal}
-        initialInsulina0={formHormonal.insulina_basal}
-        onGuardar={handleGuardarCTOG}
       />
 
       {/* ── MODAL MÉTRICAS Y VALIDACIÓN CIENTÍFICA XGBOOST CLÍNICO (ÍTEMS 10 Y 11) ── */}

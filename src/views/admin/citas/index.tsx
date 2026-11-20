@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Card from "components/card";
 import {
@@ -152,6 +152,7 @@ const CitasView: React.FC = () => {
   const [modalMinuto, setModalMinuto] = useState("00");
   const [motivo, setMotivo] = useState("");
   const [observaciones, setObservaciones] = useState("");
+  const [filtroPacienteModal, setFiltroPacienteModal] = useState("");
 
   const showToast = (message: string, type: "success" | "error" = "error") => {
     setToast({ message, type });
@@ -181,7 +182,7 @@ const CitasView: React.FC = () => {
       setCargando(true);
       const [listacitas, listapacientes] = await Promise.all([
         listarCitas(),
-        listarPacientes(),
+        listarPacientes(undefined, true, 1, 500),
       ]);
       setCitas(listacitas);
       setPacientes(listapacientes);
@@ -197,6 +198,7 @@ const CitasView: React.FC = () => {
   }, []);
 
   const abrirModalNuevaCita = (fechaPredefinida?: Date) => {
+    setFiltroPacienteModal("");
     if (fechaPredefinida && isPastDate(fechaPredefinida)) {
       showToast("No se pueden agendar citas en fechas pasadas.", "error");
       return;
@@ -321,7 +323,8 @@ const CitasView: React.FC = () => {
   const getNombrePaciente = (id?: string | null) => {
     if (!id) return "Paciente no asignado";
     const p = pacientes.find((x) => x.id === id);
-    return p ? `${p.nombre} ${p.primer_apellido}` : "Paciente registrado";
+    if (!p) return "Paciente registrado";
+    return `${p.nombre} ${p.primer_apellido}${p.segundo_apellido ? " " + p.segundo_apellido : ""}`;
   };
 
   // Estados disponibles (programada, atendida, cancelada, no asistió)
@@ -344,13 +347,15 @@ const CitasView: React.FC = () => {
     }
   };
 
-  // Filtrado general de citas
+  // Filtrado general de citas (soporta nombre, apellidos, CI y motivo)
   const citasFiltradas = citas.filter((c) => {
+    const p = pacientes.find((x) => x.id === c.paciente_id);
     const pacienteNombre = getNombrePaciente(c.paciente_id).toLowerCase();
+    const pCi = (p?.ci || "").toLowerCase();
     const motivoText = (c.motivo || "").toLowerCase();
     const q = busqueda.toLowerCase().trim();
 
-    const coincideBusqueda = !q || pacienteNombre.includes(q) || motivoText.includes(q);
+    const coincideBusqueda = !q || pacienteNombre.includes(q) || pCi.includes(q) || motivoText.includes(q);
     const coincideEstado =
       filtroEstado === "todos" ||
       c.estado === filtroEstado ||
@@ -358,6 +363,17 @@ const CitasView: React.FC = () => {
 
     return coincideBusqueda && coincideEstado;
   });
+
+  // Pacientes filtrados dinámicamente en el modal de agendación
+  const pacientesFiltradosModal = useMemo(() => {
+    if (!filtroPacienteModal.trim()) return pacientes;
+    const q = filtroPacienteModal.toLowerCase().trim();
+    return pacientes.filter((p) => {
+      const fullName = `${p.nombre} ${p.primer_apellido} ${p.segundo_apellido || ""}`.toLowerCase();
+      const ci = (p.ci || "").toLowerCase();
+      return fullName.includes(q) || ci.includes(q);
+    });
+  }, [pacientes, filtroPacienteModal]);
 
   // Lógica del Calendario
   const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
@@ -672,13 +688,36 @@ const CitasView: React.FC = () => {
 
             <form onSubmit={handleCrearCita} className="mt-5 flex flex-col gap-4">
               <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">Seleccionar Paciente *</label>
-                <select value={pacienteId} onChange={(e) => setPacienteId(e.target.value)} required className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 p-2.5 text-sm text-navy-700 outline-none dark:bg-navy-900 dark:border-navy-600 dark:text-white">
-                  <option value="">-- Seleccionar Paciente --</option>
-                  {pacientes.map((p) => (
-                    <option key={p.id} value={p.id}>{p.nombre} {p.primer_apellido}</option>
-                  ))}
-                </select>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
+                    Seleccionar Paciente *
+                  </label>
+                  <span className="text-[11px] font-semibold text-gray-400">
+                    {pacientesFiltradosModal.length} de {pacientes.length} pacientes
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={filtroPacienteModal}
+                    onChange={(e) => setFiltroPacienteModal(e.target.value)}
+                    placeholder="🔍 Buscar por nombre, apellido o CI..."
+                    className="w-full rounded-xl border border-gray-200 bg-white p-2.5 text-xs text-navy-700 outline-none focus:border-purple-500 dark:bg-navy-900 dark:border-navy-600 dark:text-white"
+                  />
+                  <select
+                    value={pacienteId}
+                    onChange={(e) => setPacienteId(e.target.value)}
+                    required
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 p-2.5 text-sm text-navy-700 outline-none dark:bg-navy-900 dark:border-navy-600 dark:text-white focus:bg-white"
+                  >
+                    <option value="">-- Seleccionar Paciente --</option>
+                    {pacientesFiltradosModal.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nombre} {p.primer_apellido} {p.segundo_apellido || ""} — CI: {p.ci || "Sin CI"}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* Selector de Fecha y Turno (AM / PM Dividido) */}

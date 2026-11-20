@@ -464,7 +464,7 @@ export const listarPacientes = async (
   busqueda?: string,
   activo?: boolean | null,
   pagina = 1,
-  porPagina = 10
+  porPagina = 500
 ): Promise<PacienteListItem[]> => {
   const params = new URLSearchParams({
     pagina: String(pagina),
@@ -479,21 +479,77 @@ export const listarPacientes = async (
   return res.json();
 };
 
+export const contarPacientes = async (): Promise<number> => {
+  try {
+    const res = await authFetch("/pacientes/total");
+    if (!res.ok) return 0;
+    const data = await res.json();
+    return typeof data.total === "number" ? data.total : 0;
+  } catch {
+    return 0;
+  }
+};
+
 export const obtenerPaciente = async (id: string): Promise<PacienteOut> => {
   const res = await authFetch(`/pacientes/${id}`);
   if (!res.ok) throw new Error("Paciente no encontrado");
   return res.json();
 };
 
+export const extraerMensajeError = async (res: Response, fallback: string): Promise<string> => {
+  try {
+    const text = await res.text();
+    if (!text) return fallback;
+    try {
+      const data = JSON.parse(text);
+      if (typeof data.detail === "string") {
+        return data.detail;
+      }
+      if (Array.isArray(data.detail)) {
+        return data.detail
+          .map((item: any) => {
+            if (typeof item === "string") return item;
+            if (item?.msg) {
+              const campo = Array.isArray(item.loc) ? item.loc[item.loc.length - 1] : "";
+              let msg = String(item.msg).replace("Value error, ", "");
+              if (item.type === "string_too_long") {
+                msg = `No puede exceder los ${item.ctx?.max_length || 20} caracteres`;
+              }
+              if (item.type === "date_from_datetime_parsing") {
+                msg = "Formato de fecha inválido";
+              }
+              return campo ? `${campo}: ${msg}` : msg;
+            }
+            return JSON.stringify(item);
+          })
+          .join(" | ");
+      }
+      if (data.message) return data.message;
+      return text;
+    } catch {
+      return text || fallback;
+    }
+  } catch {
+    return fallback;
+  }
+};
+
 export const crearPaciente = async (datos: PacienteCreate): Promise<PacienteOut> => {
+  const datosLimpios: Record<string, any> = {};
+  for (const [key, val] of Object.entries(datos)) {
+    if (val !== "" && val !== null && val !== undefined) {
+      datosLimpios[key] = typeof val === "string" ? val.trim() : val;
+    }
+  }
+
   const res = await authFetch(`/pacientes`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(datos),
+    body: JSON.stringify(datosLimpios),
   });
   if (!res.ok) {
-    const detail = await res.text();
-    throw new Error(detail || "Error al crear paciente");
+    const msg = await extraerMensajeError(res, "Error al crear paciente");
+    throw new Error(msg);
   }
   return res.json();
 };
@@ -502,12 +558,22 @@ export const actualizarPaciente = async (
   id: string,
   datos: Partial<PacienteCreate> & { activo?: boolean }
 ): Promise<PacienteOut> => {
+  const datosLimpios: Record<string, any> = {};
+  for (const [key, val] of Object.entries(datos)) {
+    if (val !== "" && val !== null && val !== undefined) {
+      datosLimpios[key] = typeof val === "string" ? val.trim() : val;
+    }
+  }
+
   const res = await authFetch(`/pacientes/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(datos),
+    body: JSON.stringify(datosLimpios),
   });
-  if (!res.ok) throw new Error("Error al actualizar paciente");
+  if (!res.ok) {
+    const msg = await extraerMensajeError(res, "Error al actualizar paciente");
+    throw new Error(msg);
+  }
   return res.json();
 };
 
@@ -527,7 +593,10 @@ export const guardarAntecedentes = async (
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...datos, paciente_id: pacienteId }),
   });
-  if (!res.ok) throw new Error("Error al guardar antecedentes");
+  if (!res.ok) {
+    const errorMsg = await extraerMensajeError(res, "Error al guardar antecedentes");
+    throw new Error(errorMsg);
+  }
   return res.json();
 };
 

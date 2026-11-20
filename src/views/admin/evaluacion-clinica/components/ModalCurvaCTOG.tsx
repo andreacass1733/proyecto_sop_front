@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from "react";
-import { MdClose, MdVerified } from "react-icons/md";
+import React, { useState, useMemo, useEffect } from "react";
+import { MdClose, MdVerified, MdInfo } from "react-icons/md";
 
 export interface CTOGData {
   glucosa0: number;
@@ -40,17 +40,26 @@ export const ModalCurvaCTOG: React.FC<ModalCurvaCTOGProps> = ({
   initialInsulina0,
   onGuardar,
 }) => {
-  // Valores serológicos de las 3 tomas estándar (0, 60, 120 min tras sobrecarga de 75g de glucosa)
+  // Valores serológicos de las 3 tomas estándar reportadas por laboratorio (0, 60, 120 min)
   const [glucosa0, setGlucosa0] = useState<string>(
-    initialGlucosa0 !== undefined && initialGlucosa0 !== "" ? String(initialGlucosa0) : "98.0"
+    initialGlucosa0 !== undefined && initialGlucosa0 !== "" ? String(initialGlucosa0) : "90.0"
   );
   const [insulina0, setInsulina0] = useState<string>(
-    initialInsulina0 !== undefined && initialInsulina0 !== "" ? String(initialInsulina0) : "16.5"
+    initialInsulina0 !== undefined && initialInsulina0 !== "" ? String(initialInsulina0) : "15.0"
   );
   const [glucosa60, setGlucosa60] = useState<string>("156.0");
   const [insulina60, setInsulina60] = useState<string>("112.0");
   const [glucosa120, setGlucosa120] = useState<string>("138.0");
   const [insulina120, setInsulina120] = useState<string>("84.0");
+
+  useEffect(() => {
+    if (initialGlucosa0 !== undefined && initialGlucosa0 !== "") {
+      setGlucosa0(String(initialGlucosa0));
+    }
+    if (initialInsulina0 !== undefined && initialInsulina0 !== "") {
+      setInsulina0(String(initialInsulina0));
+    }
+  }, [initialGlucosa0, initialInsulina0]);
 
   // Cálculos dinámicos
   const calculos = useMemo(() => {
@@ -181,17 +190,17 @@ export const ModalCurvaCTOG: React.FC<ModalCurvaCTOGProps> = ({
             <div className="h-4 w-px bg-slate-300 dark:bg-navy-700 mx-1"></div>
             <div>
               <h3 className="text-base font-bold text-navy-800 dark:text-white flex items-center gap-2">
-                Curva de Tolerancia Oral a la Glucosa (75g) e Insulina Dinámica (CTOG)
+                Curva de Tolerancia a la Glucosa (CTOG) e Insulina Dinámica
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Paciente: <span className="font-semibold text-navy-700 dark:text-navy-200">{pacienteNombre}</span> {pacienteCi && `(CI: ${pacienteCi})`} • Detección precoz de hiperinsulinismo compensatorio
+                Paciente: <span className="font-semibold text-navy-700 dark:text-navy-200">{pacienteNombre}</span> {pacienteCi && `(CI: ${pacienteCi})`} • Transcripción médica de informe de laboratorio
               </p>
             </div>
           </div>
           
           <div className="flex items-center gap-3">
-            <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800">
-              Prueba de 120 minutos
+            <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800">
+              Resultados de Laboratorio
             </span>
             <button
               onClick={onClose}
@@ -200,6 +209,16 @@ export const ModalCurvaCTOG: React.FC<ModalCurvaCTOGProps> = ({
             >
               <MdClose size={20} />
             </button>
+          </div>
+        </div>
+
+        {/* Aviso de Transcripción de Laboratorio */}
+        <div className="px-5 pt-4">
+          <div className="p-3 bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl text-xs text-blue-900 dark:text-blue-200 flex items-start gap-2.5">
+            <MdInfo className="text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" size={18} />
+            <div>
+              <span className="font-bold">Módulo de Transcripción de Laboratorio:</span> Las tomas serológicas (basal 0 min, 60 min y 120 min tras sobrecarga de 75g) son realizadas por el laboratorio clínico externo. En esta pantalla el médico únicamente transcribe los valores reportados en el informe analítico para el cálculo automático de índices de sensibilidad y resistencia insulínica (HOMA-IR, QUICKI y Matsuda).
+            </div>
           </div>
         </div>
 

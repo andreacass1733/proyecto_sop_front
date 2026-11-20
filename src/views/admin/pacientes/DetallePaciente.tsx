@@ -227,9 +227,39 @@ export default function DetallePaciente({
     showToast("Inicio de vida sexual cambiado a 'No' (Sin Sexarca)", "ok");
   };
 
+  const [errorObstetrico, setErrorObstetrico] = useState<string | null>(null);
+
+  const incoherenciaObstetrica = Boolean(
+    form.iniciada_vida_sexual &&
+    ((Number(form.partos || 0) + Number(form.cesareas || 0)) > Number(form.gestas || 0) ||
+     (Number(form.partos || 0) + Number(form.cesareas || 0) + Number(form.abortos || 0)) > Number(form.gestas || 0))
+  );
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id) return;
+
+    const gestasNum = form.iniciada_vida_sexual ? Number(form.gestas || 0) : 0;
+    const partosNum = form.iniciada_vida_sexual ? Number(form.partos || 0) : 0;
+    const cesareasNum = form.iniciada_vida_sexual ? Number(form.cesareas || 0) : 0;
+    const abortosNum = form.iniciada_vida_sexual ? Number(form.abortos || 0) : 0;
+
+    if (form.iniciada_vida_sexual) {
+      if ((partosNum + cesareasNum) > gestasNum) {
+        const errorMsg = "Incoherencia obstétrica: El número de gestas debe ser mayor o igual a la suma de partos y cesáreas.";
+        setErrorObstetrico(errorMsg);
+        showToast(errorMsg, "error");
+        return;
+      }
+      if ((partosNum + cesareasNum + abortosNum) > gestasNum) {
+        const errorMsg = "Incoherencia obstétrica: El número de gestas debe ser mayor o igual a la suma de partos, cesáreas y abortos.";
+        setErrorObstetrico(errorMsg);
+        showToast(errorMsg, "error");
+        return;
+      }
+    }
+    setErrorObstetrico(null);
+
     setSaving(true);
     try {
       const historialOriginal = Array.isArray(antecedentesOriginales?.historial)
@@ -592,7 +622,7 @@ export default function DetallePaciente({
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="block text-sm font-bold text-slate-700">
-                      Duración Habitual del Ciclo (Días) *
+                      Duración Habitual del Ciclo *
                     </label>
                     {Number(form.duracion_ciclo_habitual) > 35 && (
                       <span className="text-xs font-black text-rose-700 bg-rose-100 px-2.5 py-0.5 rounded-full border border-rose-300">
@@ -638,6 +668,20 @@ export default function DetallePaciente({
                     <p className="text-sm text-slate-500 font-medium">Aplica para pacientes con inicio de vida sexual</p>
                   </div>
                 </div>
+
+                {/* ALERTA DE INCOHERENCIA OBSTÉTRICA */}
+                {(errorObstetrico || incoherenciaObstetrica) && (
+                  <div className="p-4 bg-rose-50 border-2 border-rose-500 rounded-2xl text-xs font-bold text-rose-800 flex items-center gap-3 shadow-sm animate-fade-in">
+                    <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center flex-shrink-0">
+                      <MdWarning size={20} />
+                    </div>
+                    <span>
+                      {errorObstetrico || ((Number(form.partos || 0) + Number(form.cesareas || 0)) > Number(form.gestas || 0)
+                        ? "Incoherencia obstétrica: El número de gestas debe ser mayor o igual a la suma de partos y cesáreas."
+                        : "Incoherencia obstétrica: El número de gestas debe ser mayor o igual a la suma de partos, cesáreas y abortos.")}
+                    </span>
+                  </div>
+                )}
 
                 {/* Fórmula Obstétrica */}
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5">

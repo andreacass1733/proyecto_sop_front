@@ -259,19 +259,21 @@ const Analysis = () => {
     setValidating(true);
     setValidationError(null);
     try {
+      const nuevoResultado = etiqueta === "SOP" ? "Cumple criterio" : "No cumple criterio";
       await validarImagen(String(result.id || crypto.randomUUID()), etiqueta, {
         paciente_id: pacienteId,
         imagen_url: result.imagen_url,
         imagen_nombre: result.imagen_nombre,
         prob_sop: result.prob_sop,
         prob_normal: result.prob_normal,
-        resultado: result.resultado,
+        resultado: nuevoResultado,
         num_foliculos: result.num_foliculos,
         mapa_calor_url: result.mapa_calor_url,
         observacion_medico: observacionMedico || undefined,
       });
       setValidationLabel(etiqueta);
       setValidationDone(true);
+      setResult((prev) => (prev ? { ...prev, resultado: nuevoResultado } : null));
       // Recargar historial
       if (pacienteId) cargarHistorial(pacienteId);
     } catch (err: unknown) {
@@ -293,7 +295,9 @@ const Analysis = () => {
     ).slice(0, 15);
   }, [pacientes, busquedaPaciente]);
 
-  const cumple = result?.resultado === "Cumple criterio";
+  const cumple = validationDone && validationLabel
+    ? validationLabel === "SOP"
+    : result?.resultado === "Cumple criterio";
   const resultIdText = result?.id ? String(result.id) : null;
 
   return (
@@ -449,13 +453,21 @@ const Analysis = () => {
                         <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
                           Ecografía Ovárica
                         </span>
-                        <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                          est.resultado === "Cumple criterio"
-                            ? "bg-rose-100 text-rose-700"
-                            : "bg-emerald-100 text-emerald-700"
-                        }`}>
-                          {est.resultado === "Cumple criterio" ? "SOP" : "Normal"}
-                        </span>
+                        {(() => {
+                          const esValidado = Boolean(est.validado && est.etiqueta_real);
+                          const esSop = esValidado
+                            ? est.etiqueta_real?.toUpperCase() === "SOP"
+                            : est.resultado === "Cumple criterio";
+                          return (
+                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                              esSop
+                                ? "bg-rose-100 text-rose-700"
+                                : "bg-emerald-100 text-emerald-700"
+                            }`}>
+                              {esSop ? "SOP" : "Normal"}
+                            </span>
+                          );
+                        })()}
                       </div>
                       <p className="text-xs font-bold text-slate-900 mt-1">
                         {est.num_foliculos} folículos detectados

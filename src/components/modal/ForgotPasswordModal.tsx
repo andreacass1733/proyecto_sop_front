@@ -3,8 +3,6 @@ import ReactDOM from "react-dom";
 import {
   MdEmail,
   MdLock,
-  MdVisibility,
-  MdVisibilityOff,
   MdCheckCircle,
   MdErrorOutline,
   MdClose,
@@ -41,7 +39,6 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
   const [codigoOtp, setCodigoOtp] = useState<string>("");
   const [newPassword, setNewPassword] = useState<string>("");
   const [confirmPassword, setConfirmPassword] = useState<string>("");
-  const [showNewPassword, setShowNewPassword] = useState<boolean>(false);
   const [reenviado, setReenviado] = useState<boolean>(false);
 
   // Estados comunes
@@ -362,21 +359,13 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                 <div className="relative">
                   <MdLock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
                   <input
-                    type={showNewPassword ? "text" : "password"}
+                    type="password"
                     autoComplete="new-password"
                     placeholder="Mínimo 6 caracteres"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full pl-10 pr-10 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-300 dark:border-navy-600 rounded-xl text-xs font-semibold text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
+                    className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-300 dark:border-navy-600 rounded-xl text-xs font-semibold text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowNewPassword(!showNewPassword)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    tabIndex={-1}
-                  >
-                    {showNewPassword ? <MdVisibilityOff size={16} /> : <MdVisibility size={16} />}
-                  </button>
                 </div>
               </div>
 
@@ -388,7 +377,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                 <div className="relative">
                   <MdLock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
                   <input
-                    type={showNewPassword ? "text" : "password"}
+                    type="password"
                     autoComplete="new-password"
                     placeholder="Repita la nueva contraseña"
                     value={confirmPassword}

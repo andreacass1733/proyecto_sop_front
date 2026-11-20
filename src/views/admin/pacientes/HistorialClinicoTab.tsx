@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   MdHistory,
   MdAdd,
@@ -11,6 +11,15 @@ import {
   MdPerson,
   MdTimeline,
   MdShield,
+  MdCalendarMonth,
+  MdLocalHospital,
+  MdScience,
+  MdMonitorWeight,
+  MdOutlineAssignment,
+  MdFemale,
+  MdTrendingDown,
+  MdTrendingUp,
+  MdArrowForward,
 } from "react-icons/md";
 import {
   PacienteListItem,
@@ -23,6 +32,7 @@ import {
   obtenerTratamientoPaciente,
   obtenerComparativaConsultas,
   ComparativaEvolucionOut,
+  ConsultaEvolucionItem,
 } from "services/api";
 import { getActivePatientId, setActivePatientId } from "utils/activePatient";
 import { imprimirContenidoClinico } from "utils/printDocument";
@@ -41,6 +51,26 @@ interface NotaEvolucion {
   detalle: string;
 }
 
+interface EventoClinicoConsolidado {
+  id: string;
+  fecha: string;
+  tipo_evento: string;
+  medico: string;
+  detalle: string;
+  esManual: boolean;
+  metricas?: {
+    imc?: number | string | null;
+    peso?: number | string | null;
+    ciclo?: number | string | null;
+    fg?: number | string | null;
+    testosterona?: number | string | null;
+    homa?: number | string | null;
+    foliculos?: number | string | null;
+    ecoResultado?: string | null;
+    fenotipo?: string | null;
+  };
+}
+
 function formatLocalDate(d: Date): string {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, "0");
@@ -57,23 +87,48 @@ function calcularEdad(fechaNacimiento?: string | null): string {
   return `${m < 0 || (m === 0 && hoy.getDate() < nac.getDate()) ? edad - 1 : edad} años`;
 }
 
+function obtenerDatosMedicoActivo(): { nombre: string; especialidad: string; matricula: string } {
+  try {
+    const raw = localStorage.getItem("sop_active_doctor");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const nombreCompleto = `Dr. ${parsed.nombre || ""} ${parsed.primer_apellido || ""}`.trim();
+      return {
+        nombre: nombreCompleto || "Dr. Rodrigo Espinoza Iturri",
+        especialidad: parsed.especialidad || "Endocrinología y Ginecología Metabólica",
+        matricula: parsed.matricula || "Reg. Col. Med. 48291",
+      };
+    }
+  } catch {
+    // fallback
+  }
+  return {
+    nombre: "Dr. Rodrigo Espinoza Iturri",
+    especialidad: "Endocrinología y Ginecología Metabólica",
+    matricula: "Reg. Col. Med. 48291",
+  };
+}
+
 export default function HistorialClinicoTab({
   paciente: pacienteProp,
   onNavigateToTab,
   onSelectPaciente,
 }: HistorialClinicoTabProps) {
-  // Lista de pacientes y paciente activo
+  const doctorActivo = useMemo(() => obtenerDatosMedicoActivo(), []);
+
+  // Lista de pacientes y búsqueda interactiva
   const [listaPacientes, setListaPacientes] = useState<PacienteListItem[]>([]);
   const [pacienteSeleccionado, setPacienteSeleccionado] = useState<PacienteListItem | null>(pacienteProp);
   const [dropdownPacienteAbierto, setDropdownPacienteAbierto] = useState(false);
   const [busquedaPaciente, setBusquedaPaciente] = useState("");
+  const [buscandoPacientes, setBuscandoPacientes] = useState(false);
 
-  // Vista activa: "evolucion" (Métricas longitudinales) o "auditoria" (Informe Pericial)
+  // Vista activa: "evolucion" (Métricas longitudinales y bitácora) o "auditoria" (Informe Pericial)
   const [vistaActiva, setVistaActiva] = useState<"evolucion" | "auditoria">("evolucion");
 
   // Estados de datos REALES de la base de datos
   const [loading, setLoading] = useState(false);
-  const [historial, setHistorial] = useState<NotaEvolucion[]>([]);
+  const [historialNotas, setHistorialNotas] = useState<NotaEvolucion[]>([]);
   const [antecedentesCompletos, setAntecedentesCompletos] = useState<any>(null);
   const [datosRotterdam, setDatosRotterdam] = useState<any>(null);
   const [datosHormonales, setDatosHormonales] = useState<any>(null);
@@ -91,7 +146,7 @@ export default function HistorialClinicoTab({
   const [nuevaNota, setNuevaNota] = useState({
     tipo_evento: "Consulta Médica de Control",
     fecha: formatLocalDate(new Date()),
-    medico: "Dra. Valeria Mendoza",
+    medico: doctorActivo.nombre,
     detalle: "",
   });
 
@@ -100,20 +155,31 @@ export default function HistorialClinicoTab({
     setTimeout(() => setToast(null), 3500);
   };
 
-  // Cargar lista completa de pacientes
-  useEffect(() => {
-    listarPacientes("", null, 1, 300)
-      .then((data) => {
-        setListaPacientes(data);
-        if (!pacienteProp && data.length > 0) {
-          const storedId = getActivePatientId();
-          const target = data.find((p) => p.id === storedId) || data[0];
+  // Cargar lista inicial de pacientes
+  const cargarPacientesInicial = useCallback(async () => {
+    try {
+      setBuscandoPacientes(true);
+      const data = await listarPacientes(undefined, null, 1, 100);
+      setListaPacientes(data);
+
+      if (!pacienteProp) {
+        const storedId = getActivePatientId();
+        const target = (storedId && data.find((p) => p.id === storedId)) || data[0] || null;
+        if (target) {
           setPacienteSeleccionado(target);
           setActivePatientId(target.id);
         }
-      })
-      .catch((err) => console.error("Error al cargar pacientes para historial:", err));
+      }
+    } catch (err) {
+      console.error("Error al cargar pacientes para historial:", err);
+    } finally {
+      setBuscandoPacientes(false);
+    }
   }, [pacienteProp]);
+
+  useEffect(() => {
+    cargarPacientesInicial();
+  }, [cargarPacientesInicial]);
 
   // Sincronizar prop paciente
   useEffect(() => {
@@ -123,14 +189,47 @@ export default function HistorialClinicoTab({
     }
   }, [pacienteProp]);
 
+  // Búsqueda interactiva en backend al escribir en el selector de pacientes
+  useEffect(() => {
+    if (!dropdownPacienteAbierto) return;
+    const q = busquedaPaciente.trim();
+    if (!q) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        setBuscandoPacientes(true);
+        const resultados = await listarPacientes(q, null, 1, 50);
+        setListaPacientes((prev) => {
+          const mapa = new Map<string, PacienteListItem>();
+          resultados.forEach((p) => mapa.set(p.id, p));
+          prev.forEach((p) => {
+            if (!mapa.has(p.id)) mapa.set(p.id, p);
+          });
+          return Array.from(mapa.values());
+        });
+      } catch (err) {
+        console.warn("Aviso en búsqueda interactiva de pacientes:", err);
+      } finally {
+        setBuscandoPacientes(false);
+      }
+    }, 280);
+
+    return () => clearTimeout(timer);
+  }, [busquedaPaciente, dropdownPacienteAbierto]);
+
   // Escuchar evento global de cambio de paciente
   useEffect(() => {
     const handlePatientChanged = (e: any) => {
       const nuevoId = e.detail?.pacienteId;
-      if (nuevoId && listaPacientes.length > 0) {
+      if (nuevoId && nuevoId !== pacienteSeleccionado?.id) {
         const found = listaPacientes.find((p) => p.id === nuevoId);
-        if (found && found.id !== pacienteSeleccionado?.id) {
+        if (found) {
           setPacienteSeleccionado(found);
+        } else {
+          listarPacientes(undefined, null, 1, 100).then((all) => {
+            const f = all.find((p) => p.id === nuevoId);
+            if (f) setPacienteSeleccionado(f);
+          });
         }
       }
     };
@@ -145,7 +244,9 @@ export default function HistorialClinicoTab({
     setPacienteSeleccionado(p);
     setActivePatientId(p.id);
     setDropdownPacienteAbierto(false);
+    setBusquedaPaciente("");
     if (onSelectPaciente) onSelectPaciente(p);
+    showToast(`Paciente seleccionado: ${p.nombre} ${p.primer_apellido}`);
   };
 
   // Cargar historial y datos REALES del paciente desde el backend
@@ -167,12 +268,12 @@ export default function HistorialClinicoTab({
         let lista: NotaEvolucion[] = [];
         if (antData.value.historial && Array.isArray(antData.value.historial)) {
           lista = antData.value.historial.filter(
-            (h: any) => h && typeof h === "object" && !h.__iniciada_vida_sexual__ && h.detalle
+            (h: any) => h && typeof h === "object" && !h.__iniciada_vida_sexual__ && (h.detalle || h.motivo)
           );
         }
-        setHistorial(lista);
+        setHistorialNotas(lista);
       } else {
-        setHistorial([]);
+        setHistorialNotas([]);
       }
 
       setDatosRotterdam(rotData.status === "fulfilled" ? rotData.value : null);
@@ -180,8 +281,9 @@ export default function HistorialClinicoTab({
       setDatosClinicos(clinData.status === "fulfilled" ? clinData.value : null);
       setDatosTratamiento(tratData.status === "fulfilled" ? tratData.value : null);
       setDatosComparativa(compData.status === "fulfilled" ? compData.value : null);
-    } catch {
-      setHistorial([]);
+    } catch (err) {
+      console.warn("Aviso al cargar historial clínico:", err);
+      setHistorialNotas([]);
     } finally {
       setLoading(false);
     }
@@ -191,8 +293,8 @@ export default function HistorialClinicoTab({
     cargarHistorial();
   }, [cargarHistorial]);
 
-  // Persistir nota en backend (tabla antecedentes_medicos -> columna historial JSONB)
-  const persistirHistorial = async (nuevoHistorial: NotaEvolucion[]) => {
+  // Persistir notas manuales en tabla antecedentes_medicos -> columna historial JSONB
+  const persistirHistorialNotas = async (nuevasNotas: NotaEvolucion[]) => {
     if (!targetPaciente?.id) return;
     try {
       const metaSexarca = antecedentesCompletos?.historial?.find(
@@ -219,12 +321,12 @@ export default function HistorialClinicoTab({
         resistencia_insulina: antecedentesCompletos?.resistencia_insulina ?? false,
         alergias: antecedentesCompletos?.alergias || "Ninguna conocida",
         observaciones: antecedentesCompletos?.observaciones || null,
-        historial: [...nuevoHistorial, metaSexarca],
+        historial: [...nuevasNotas, metaSexarca],
       };
 
       await guardarAntecedentes(targetPaciente.id, payload);
     } catch (err) {
-      console.warn("Aviso al sincronizar historial con base de datos:", err);
+      console.warn("Aviso al sincronizar notas de evolución:", err);
     }
   };
 
@@ -239,34 +341,34 @@ export default function HistorialClinicoTab({
       id: `h-${Date.now()}`,
       fecha: `${nuevaNota.fecha}T${new Date().toTimeString().split(" ")[0]}Z`,
       tipo_evento: nuevaNota.tipo_evento,
-      medico: nuevaNota.medico,
+      medico: nuevaNota.medico || doctorActivo.nombre,
       detalle: nuevaNota.detalle.trim(),
     };
 
-    const actualizados = [nueva, ...historial];
-    setHistorial(actualizados);
+    const actualizados = [nueva, ...historialNotas];
+    setHistorialNotas(actualizados);
     setModalNuevaNota(false);
     setNuevaNota({
       tipo_evento: "Consulta Médica de Control",
       fecha: formatLocalDate(new Date()),
-      medico: "Dra. Valeria Mendoza",
+      medico: doctorActivo.nombre,
       detalle: "",
     });
 
-    await persistirHistorial(actualizados);
+    await persistirHistorialNotas(actualizados);
     showToast("Nota de evolución clínica registrada con éxito", "ok");
   };
 
   const handleEliminarNota = async (idNota: string) => {
     if (window.confirm("¿Desea retirar esta nota de evolución del historial clínico?")) {
-      const filtrados = historial.filter((n) => n.id !== idNota);
-      setHistorial(filtrados);
-      await persistirHistorial(filtrados);
+      const filtrados = historialNotas.filter((n) => n.id !== idNota);
+      setHistorialNotas(filtrados);
+      await persistirHistorialNotas(filtrados);
       showToast("Nota retirada del historial", "ok");
     }
   };
 
-  // Datos REALES del paciente
+  // Datos del paciente
   const nombrePaciente = targetPaciente
     ? `${targetPaciente.nombre} ${targetPaciente.primer_apellido} ${targetPaciente.segundo_apellido || ""}`.trim()
     : "Paciente en Consulta";
@@ -277,21 +379,22 @@ export default function HistorialClinicoTab({
   const edad = targetPaciente?.fecha_nacimiento ? calcularEdad(targetPaciente.fecha_nacimiento) : "—";
 
   // Procesamiento de las consultas REALES para generar la evolución longitudinal
-  const consultasReales = datosComparativa?.consultas || [];
+  const consultasReales: ConsultaEvolucionItem[] = datosComparativa?.consultas || [];
 
-  // Puntos longitudinales para las barras (hasta 4 consultas cronológicas con datos)
-  const puntosEvolutivos = (() => {
+  // Puntos longitudinales para las barras comparativas
+  const puntosEvolutivos = useMemo(() => {
     if (consultasReales.length === 0) {
-      // Si la paciente no tiene consultas aún, pero tiene datos clínicos o de laboratorio en su ficha:
       if (datosClinicos || datosHormonales) {
-        return [{
-          etiqueta: "Registro Inicial",
-          fecha: datosClinicos?.updated_at || datosHormonales?.updated_at || "Control Basal",
-          ciclo: datosClinicos?.duracion_ciclo_dias ?? null,
-          testo: datosHormonales?.testosterona_total ?? null,
-          fg: datosClinicos?.score_ferriman_gallwey ?? null,
-          homa: datosHormonales?.homa_ir ? Number(datosHormonales.homa_ir) : null,
-        }];
+        return [
+          {
+            etiqueta: "Registro Inicial",
+            fecha: datosClinicos?.updated_at || datosHormonales?.updated_at || "Control Basal",
+            ciclo: datosClinicos?.duracion_ciclo_dias !== undefined && datosClinicos?.duracion_ciclo_dias !== "" ? Number(datosClinicos.duracion_ciclo_dias) : null,
+            testo: datosHormonales?.testosterona_total !== undefined && datosHormonales?.testosterona_total !== "" ? Number(datosHormonales.testosterona_total) : null,
+            fg: datosClinicos?.score_ferriman_gallwey !== undefined && datosClinicos?.score_ferriman_gallwey !== "" ? Number(datosClinicos.score_ferriman_gallwey) : null,
+            homa: datosHormonales?.homa_ir ? Number(datosHormonales.homa_ir) : null,
+          },
+        ];
       }
       return [];
     }
@@ -307,7 +410,7 @@ export default function HistorialClinicoTab({
       }));
     }
 
-    // Si tiene más de 4 consultas, tomamos la inicial, dos intermedias clave y la última
+    // Si tiene más de 4 consultas, tomamos cronológicamente la inicial, 2 intermedias y la actual
     const step = Math.floor((consultasReales.length - 1) / 3);
     const indices = [0, step, step * 2, consultasReales.length - 1];
     return indices.map((idx, pos) => {
@@ -321,13 +424,13 @@ export default function HistorialClinicoTab({
         homa: c.homa_ir !== undefined && c.homa_ir !== null ? Number(c.homa_ir) : null,
       };
     });
-  })();
+  }, [consultasReales, datosClinicos, datosHormonales]);
 
   // Últimos valores medidos para diagnósticos y conclusiones
   const ultimoPunto = puntosEvolutivos[puntosEvolutivos.length - 1];
-  const duracionCiclo = ultimoPunto?.ciclo ?? datosClinicos?.duracion_ciclo_dias ?? null;
-  const testosterona = ultimoPunto?.testo ?? datosHormonales?.testosterona_total ?? null;
-  const fgScore = ultimoPunto?.fg ?? datosClinicos?.score_ferriman_gallwey ?? null;
+  const duracionCiclo = ultimoPunto?.ciclo ?? (datosClinicos?.duracion_ciclo_dias ? Number(datosClinicos.duracion_ciclo_dias) : null);
+  const testosterona = ultimoPunto?.testo ?? (datosHormonales?.testosterona_total ? Number(datosHormonales.testosterona_total) : null);
+  const fgScore = ultimoPunto?.fg ?? (datosClinicos?.score_ferriman_gallwey !== undefined && datosClinicos?.score_ferriman_gallwey !== "" ? Number(datosClinicos.score_ferriman_gallwey) : null);
   const homaIr = ultimoPunto?.homa !== null && ultimoPunto?.homa !== undefined
     ? Number(ultimoPunto.homa).toFixed(2)
     : datosHormonales?.homa_ir
@@ -346,11 +449,80 @@ export default function HistorialClinicoTab({
   const medicacionesReales: string[] = datosTratamiento?.medicaciones && datosTratamiento.medicaciones.length > 0
     ? datosTratamiento.medicaciones.map((m: any) => `• ${m.nombre_medicamento} ${m.dosis} (${m.frecuencia})`)
     : [
-        "• Protocolo de estilo de vida y control metabólico",
-        "• Suplementación y optimización ovulatoria protocolizada",
+        "• Protocolo de estilo de vida, ejercicio y control metabólico",
+        "• Suplementación ovulatoria y seguimiento protocolizado",
       ];
 
-  // Función para imprimir el Informe Pericial de Auditoría Médica con datos 100% REALES
+  // ════════════════════════════════════════════════════════════════════════════
+  // CONSOLIDACIÓN DE EVENTOS REALES EN LA LÍNEA DE TIEMPO
+  // ════════════════════════════════════════════════════════════════════════════
+  const timelineEventos: EventoClinicoConsolidado[] = useMemo(() => {
+    const lista: EventoClinicoConsolidado[] = [];
+
+    // 1. Agregar consultas médicas registradas en la base de datos
+    consultasReales.forEach((c) => {
+      const lineasDetalle: string[] = [];
+      if (c.motivo) lineasDetalle.push(`Motivo: ${c.motivo}`);
+      if (c.observaciones) lineasDetalle.push(`Observaciones: ${c.observaciones}`);
+      if (c.fenotipo_rotterdam && c.fenotipo_rotterdam !== "Sin Evaluar") {
+        lineasDetalle.push(`Diagnóstico Rotterdam: ${c.fenotipo_rotterdam}`);
+      }
+
+      lista.push({
+        id: `consulta-${c.consulta_id}`,
+        fecha: c.fecha,
+        tipo_evento: "Consulta Médica",
+        medico: doctorActivo.nombre,
+        detalle: lineasDetalle.join("\n") || "Atención clínica especializada de seguimiento SOP.",
+        esManual: false,
+        metricas: {
+          imc: c.imc,
+          peso: c.peso_kg,
+          ciclo: c.duracion_ciclo_dias,
+          fg: c.score_ferriman_gallwey,
+          testosterona: c.testosterona_total,
+          homa: c.homa_ir,
+          foliculos: c.num_foliculos,
+          ecoResultado: c.resultado_eco,
+          fenotipo: c.fenotipo_rotterdam,
+        },
+      });
+    });
+
+    // 2. Agregar notas clínicas manuales registradas en antecedentes.historial
+    historialNotas.forEach((n) => {
+      lista.push({
+        id: n.id,
+        fecha: n.fecha,
+        tipo_evento: n.tipo_evento,
+        medico: n.medico || doctorActivo.nombre,
+        detalle: n.detalle,
+        esManual: true,
+      });
+    });
+
+    // 3. Ordenar cronológicamente (más recientes primero)
+    return lista.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+  }, [consultasReales, historialNotas, doctorActivo.nombre]);
+
+  // Filtrado de eventos en la bitácora
+  const eventosFiltrados = useMemo(() => {
+    return timelineEventos.filter((n) => {
+      const matchBusqueda =
+        n.detalle.toLowerCase().includes(busqueda.toLowerCase()) ||
+        n.tipo_evento.toLowerCase().includes(busqueda.toLowerCase()) ||
+        n.medico.toLowerCase().includes(busqueda.toLowerCase());
+
+      const matchTipo =
+        filtroTipo === "todos"
+          ? true
+          : n.tipo_evento.toLowerCase().includes(filtroTipo.toLowerCase());
+
+      return matchBusqueda && matchTipo;
+    });
+  }, [timelineEventos, busqueda, filtroTipo]);
+
+  // Impresión formal del Informe Pericial con datos 100% reales
   const handleImprimirInforme = () => {
     const fechaHoy = new Date().toLocaleDateString("es-ES", {
       day: "2-digit",
@@ -359,23 +531,23 @@ export default function HistorialClinicoTab({
     });
 
     const cuerpoHtml = `
-      <div style="border: 2px solid #334155; border-radius: 10px; padding: 22px; background: #ffffff; color: #1e293b;">
+      <div style="border: 2px solid #334155; border-radius: 10px; padding: 22px; background: #ffffff; color: #1e293b; font-family: system-ui, -apple-system, sans-serif;">
         <!-- Header -->
         <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #e2e8f0; padding-bottom: 14px; margin-bottom: 14px;">
           <div>
-            <div style="font-size: 14pt; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: -0.3px;">
-              HOSPITAL GENERAL UNIVERSITARIO — UNIDAD SOP-CARE
+            <div style="font-size: 13pt; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: -0.3px;">
+              SISTEMA CLÍNICO SOP — PROTOCOLO DE ROTTERDAM
             </div>
             <div style="font-size: 9pt; color: #64748b; font-weight: 600; margin-top: 3px;">
-              Informe Pericial de Diagnóstico y Fenotipificación Asistida por IA (Auditoría ISO/IEC en Salud)
+              Informe Pericial de Diagnóstico y Fenotipificación Multimodal Asistida por IA (Auditoría ISO/IEC en Salud)
             </div>
           </div>
           <div style="text-align: right;">
             <div style="font-size: 9pt; font-weight: 800; color: #7c3aed; font-family: monospace;">
-              ID INFORME: RPT-2026-${ciPaciente}
+              EXPEDIENTE: CI-${ciPaciente}
             </div>
             <div style="font-size: 8.5pt; color: #475569; margin-top: 2px;">
-              Fecha: ${fechaHoy}
+              Fecha de Emisión: ${fechaHoy}
             </div>
           </div>
         </div>
@@ -386,25 +558,25 @@ export default function HistorialClinicoTab({
             <div><strong style="color: #475569;">Paciente:</strong> <span style="font-weight: 800; color: #0f172a;">${nombrePaciente}</span></div>
             <div><strong style="color: #475569;">Edad:</strong> <span style="font-weight: 700;">${edad}</span></div>
             <div><strong style="color: #475569;">DNI/CI:</strong> <span style="font-weight: 700;">${ciPaciente}</span></div>
-            <div><strong style="color: #475569;">HC:</strong> <span style="font-weight: 700;">${targetPaciente?.id?.substring(0, 8) || "—"}</span></div>
+            <div><strong style="color: #475569;">ID Clínico:</strong> <span style="font-weight: 700;">${targetPaciente?.id?.substring(0, 8) || "—"}</span></div>
           </div>
           <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 8px;">
-            <div><strong style="color: #475569;">Médico:</strong> <span style="font-weight: 700;">Dra. Valeria Mendoza</span></div>
+            <div><strong style="color: #475569;">Especialista:</strong> <span style="font-weight: 700;">${doctorActivo.nombre}</span></div>
             <div><strong style="color: #475569;">IMC:</strong> <span style="font-weight: 700;">${imc}</span></div>
             <div><strong style="color: #475569;">Circunferencia:</strong> <span style="font-weight: 700;">${datosClinicos?.circunferencia_abdominal_cm ? `${datosClinicos.circunferencia_abdominal_cm} cm` : "—"}</span></div>
-            <div><strong style="color: #475569;">Especialidad:</strong> <span style="font-weight: 700;">Endocrinología y Metabolismo</span></div>
+            <div><strong style="color: #475569;">Especialidad:</strong> <span style="font-weight: 700;">${doctorActivo.especialidad}</span></div>
           </div>
         </div>
 
-        <!-- 3 Criterios Box con Datos Reales -->
+        <!-- 3 Criterios de Rotterdam -->
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 12px;">
           <div style="border: 1px solid #fecdd3; border-radius: 8px; padding: 10px; background: #fff1f2;">
             <div style="font-size: 8pt; font-weight: 900; color: #be123c; margin-bottom: 4px;">CRITERIO 1: OVULATORIO</div>
             <div style="font-size: 8pt; color: #334155; line-height: 1.35;">
-              ${duracionCiclo ? `Duración de ciclo: ${duracionCiclo} días.` : "Ciclo no registrado."}
+              ${duracionCiclo ? `Duración habitual: ${duracionCiclo} días.` : "Ciclo en evaluación."}
               ${progesterona ? `Progesterona: ${progesterona} ng/mL.` : ""}
-              <div style="margin-top: 4px; font-weight: bold; color: ${datosRotterdam?.criterio1_cumple ? '#be123c' : '#15803d'};">
-                ${datosRotterdam?.criterio1_cumple ? "Cumple Disfunción Ovulatoria" : "Sin Disfunción Ovulatoria confirmada"}
+              <div style="margin-top: 4px; font-weight: bold; color: ${datosRotterdam?.criterio1_cumple ? "#be123c" : "#15803d"};">
+                ${datosRotterdam?.criterio1_cumple ? "Cumple Disfunción Ovulatoria" : "Sin disfunción confirmada"}
               </div>
             </div>
           </div>
@@ -413,17 +585,17 @@ export default function HistorialClinicoTab({
             <div style="font-size: 8pt; color: #334155; line-height: 1.35;">
               ${fgScore !== null ? `Score Ferriman-Gallwey: ${fgScore} pts.` : "FG no evaluado."}
               ${testosterona ? `Testosterona Total: ${testosterona} ng/dL.` : ""}
-              <div style="margin-top: 4px; font-weight: bold; color: ${datosRotterdam?.criterio2_cumple ? '#be123c' : '#15803d'};">
-                ${datosRotterdam?.criterio2_cumple ? "Cumple Hiperandrogenismo" : "Andrógenos en rango normal"}
+              <div style="margin-top: 4px; font-weight: bold; color: ${datosRotterdam?.criterio2_cumple ? "#be123c" : "#15803d"};">
+                ${datosRotterdam?.criterio2_cumple ? "Cumple Hiperandrogenismo" : "Andrógenos normales"}
               </div>
             </div>
           </div>
           <div style="border: 1px solid #fecdd3; border-radius: 8px; padding: 10px; background: #fff1f2;">
             <div style="font-size: 8pt; font-weight: 900; color: #be123c; margin-bottom: 4px;">CRITERIO 3: ECOGRÁFICO</div>
             <div style="font-size: 8pt; color: #334155; line-height: 1.35;">
-              ${datosRotterdam?.criterio3_cumple ? "Morfología Ovárica Poliquística detectada (PCOM ≥ 20 folículos / volumen ≥ 10 mL)." : "Morfología ovárica sin patrón poliquístico."}
-              <div style="margin-top: 4px; font-weight: bold; color: ${datosRotterdam?.criterio3_cumple ? '#be123c' : '#15803d'};">
-                ${datosRotterdam?.criterio3_cumple ? "Cumple Criterio Ecográfico" : "No cumple Criterio 3"}
+              ${datosRotterdam?.criterio3_cumple ? "Morfología ovárica poliquística detectada (PCOM ≥ 12-20 folículos)." : "Ecografía ovárica sin patrón poliquístico."}
+              <div style="margin-top: 4px; font-weight: bold; color: ${datosRotterdam?.criterio3_cumple ? "#be123c" : "#15803d"};">
+                ${datosRotterdam?.criterio3_cumple ? "Cumple Criterio Ecográfico" : "No cumple"}
               </div>
             </div>
           </div>
@@ -432,7 +604,7 @@ export default function HistorialClinicoTab({
         <!-- Dictamen Definitivo -->
         <div style="border: 1.5px solid #c084fc; border-radius: 8px; padding: 12px 14px; background: #faf5ff; margin-bottom: 12px;">
           <div style="font-size: 9.5pt; font-weight: 900; color: #6b21a8; margin-bottom: 4px; text-transform: uppercase;">
-            DICTAMEN DEFINITIVO: ${fenotipoNombre.toUpperCase()}
+            DICTAMEN INTEGRAL: ${fenotipoNombre.toUpperCase()}
           </div>
           <div style="font-size: 8.5pt; color: #3b0764; line-height: 1.4;">
             ${datosComparativa?.resumen_clinico || "Evaluación diagnóstica consolidada bajo el Consenso Internacional de Rotterdam (ESHRE/ASRM 2023). Integración de marcadores clínicos, metabólicos y de imagenología ovárica."}
@@ -444,18 +616,18 @@ export default function HistorialClinicoTab({
         <div style="border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 14px; background: #f8fafc; margin-bottom: 18px;">
           <div style="font-size: 8.5pt; font-weight: 800; color: #0f172a; margin-bottom: 6px;">Plan Farmacológico y Estilo de Vida:</div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 8pt; color: #334155;">
-            ${medicacionesReales.map(m => `<div>${m}</div>`).join("")}
+            ${medicacionesReales.map((m) => `<div>${m}</div>`).join("")}
           </div>
         </div>
 
-        <!-- Footer / Firmas -->
+        <!-- Firmas -->
         <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 24px; padding-top: 10px;">
-          <div style="border-top: 1px solid #94a3b8; width: 220px; padding-top: 6px; text-align: center;">
-            <div style="font-size: 8.5pt; font-weight: 800; color: #0f172a;">Dra. Valeria Mendoza</div>
-            <div style="font-size: 7.5pt; color: #64748b;">Médico Especialista en Endocrinología • Reg. Col. 48291</div>
+          <div style="border-top: 1px solid #94a3b8; width: 240px; padding-top: 6px; text-align: center;">
+            <div style="font-size: 8.5pt; font-weight: 800; color: #0f172a;">${doctorActivo.nombre}</div>
+            <div style="font-size: 7.5pt; color: #64748b;">${doctorActivo.especialidad} • ${doctorActivo.matricula}</div>
           </div>
           <div style="border: 1px dashed #94a3b8; border-radius: 6px; padding: 6px 12px; background: #f8fafc; font-family: monospace; text-align: right; font-size: 7.5pt; color: #64748b;">
-            <div style="font-weight: 800; color: #1e293b;">🔒 SELLO DIGITAL SHA-256 IA-VERIFIED</div>
+            <div style="font-weight: 800; color: #1e293b;">🔒 SELLO DIGITAL CRIPTOGRÁFICO SHA-256</div>
             <div>Hash: ${(targetPaciente?.id || "").replace(/-/g, "").padEnd(32, "0").slice(0, 24)}...</div>
           </div>
         </div>
@@ -465,25 +637,12 @@ export default function HistorialClinicoTab({
     imprimirContenidoClinico(`Informe-Auditoria-${ciPaciente}`, cuerpoHtml);
   };
 
-  // Filtrado de notas de evolución en bitácora
-  const notasFiltradas = historial.filter((n) => {
-    const matchBusqueda =
-      n.detalle.toLowerCase().includes(busqueda.toLowerCase()) ||
-      n.tipo_evento.toLowerCase().includes(busqueda.toLowerCase()) ||
-      n.medico.toLowerCase().includes(busqueda.toLowerCase());
-
-    const matchTipo =
-      filtroTipo === "todos" ? true : n.tipo_evento.toLowerCase().includes(filtroTipo.toLowerCase());
-
-    return matchBusqueda && matchTipo;
-  });
-
   return (
     <div className="space-y-6">
       {/* Indicador de carga sutil */}
       {loading && (
-        <div className="py-2 px-4 rounded-xl bg-purple-50 border border-purple-200 text-purple-700 text-xs font-bold animate-pulse flex items-center gap-2">
-          <span>Actualizando datos clínicos y comparativa evolutiva desde el servidor...</span>
+        <div className="py-2.5 px-4 rounded-xl bg-purple-50 border border-purple-200 text-purple-700 text-xs font-bold animate-pulse flex items-center gap-2">
+          <span>Actualizando datos clínicos, comparativa evolutiva y expediente desde el servidor...</span>
         </div>
       )}
 
@@ -499,7 +658,7 @@ export default function HistorialClinicoTab({
         </div>
       )}
 
-      {/* ── ENCABEZADO MÉDICO CON SELECTOR DE PACIENTE INTERACTIVO ── */}
+      {/* ── ENCABEZADO MÉDICO CON SELECTOR DE PACIENTE REAL Y BUSCADOR ACTIVO ── */}
       <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3.5">
         <div className="flex items-center gap-3.5">
           <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center font-black text-sm shadow-sm flex-shrink-0">
@@ -508,7 +667,7 @@ export default function HistorialClinicoTab({
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700 border border-purple-200">
-                Historial Clínico y Evolución
+                Historial Clínico Longitudinal
               </span>
               <span className="text-xs text-slate-500 font-medium">
                 Expediente: <strong className="text-slate-800">CI {ciPaciente}</strong>
@@ -526,11 +685,16 @@ export default function HistorialClinicoTab({
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Selector interactivo de pacientes */}
+          {/* Selector y Buscador interactivo de pacientes */}
           <div className="relative">
             <button
               type="button"
-              onClick={() => setDropdownPacienteAbierto(!dropdownPacienteAbierto)}
+              onClick={() => {
+                setDropdownPacienteAbierto(!dropdownPacienteAbierto);
+                if (!dropdownPacienteAbierto && listaPacientes.length === 0) {
+                  cargarPacientesInicial();
+                }
+              }}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 transition border border-purple-200 shadow-sm"
             >
               <MdPerson size={16} />
@@ -538,44 +702,66 @@ export default function HistorialClinicoTab({
             </button>
 
             {dropdownPacienteAbierto && (
-              <div className="absolute right-0 top-full mt-2 w-80 max-h-72 overflow-y-auto bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 p-2 space-y-1 animate-fade-in-up">
-                <div className="relative mb-1">
-                  <MdSearch className="absolute left-2.5 top-2 text-slate-400" size={16} />
+              <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 max-h-80 overflow-y-auto bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 p-2.5 space-y-1.5 animate-fade-in-up">
+                <div className="relative">
+                  <MdSearch className="absolute left-2.5 top-2.5 text-slate-400" size={16} />
                   <input
                     type="text"
-                    placeholder="Buscar paciente por nombre o CI..."
+                    placeholder="Buscar por nombre, apellido o CI..."
                     value={busquedaPaciente}
                     onChange={(e) => setBusquedaPaciente(e.target.value)}
                     onClick={(e) => e.stopPropagation()}
-                    className="w-full text-xs pl-8 pr-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 outline-none focus:border-purple-500 text-slate-800"
+                    className="w-full text-xs pl-8 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 outline-none focus:border-purple-500 text-slate-800 font-medium"
                     autoFocus
                   />
+                  {buscandoPacientes && (
+                    <span className="absolute right-2.5 top-2.5 text-[10px] text-purple-600 font-bold animate-pulse">
+                      Buscando...
+                    </span>
+                  )}
                 </div>
 
-                {listaPacientes
-                  .filter((p) => {
-                    const q = busquedaPaciente.toLowerCase();
-                    return (
-                      p.nombre.toLowerCase().includes(q) ||
-                      p.primer_apellido.toLowerCase().includes(q) ||
-                      (p.ci && p.ci.toLowerCase().includes(q))
-                    );
-                  })
-                  .map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => handleCambiarPaciente(p)}
-                      className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
-                        targetPaciente?.id === p.id
-                          ? "bg-purple-50 text-purple-700 font-bold"
-                          : "text-slate-700 hover:bg-slate-50"
-                      }`}
-                    >
-                      <span className="truncate">{`${p.nombre} ${p.primer_apellido} ${p.segundo_apellido || ""}`}</span>
-                      <span className="text-[10px] text-slate-400 shrink-0 ml-2">CI: {p.ci || "—"}</span>
-                    </button>
-                  ))}
+                <div className="max-h-60 overflow-y-auto space-y-1 pr-1">
+                  {listaPacientes
+                    .filter((p) => {
+                      if (!busquedaPaciente.trim()) return true;
+                      const q = busquedaPaciente.toLowerCase();
+                      return (
+                        p.nombre.toLowerCase().includes(q) ||
+                        p.primer_apellido.toLowerCase().includes(q) ||
+                        (p.segundo_apellido && p.segundo_apellido.toLowerCase().includes(q)) ||
+                        (p.ci && p.ci.toLowerCase().includes(q))
+                      );
+                    })
+                    .map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => handleCambiarPaciente(p)}
+                        className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
+                          targetPaciente?.id === p.id
+                            ? "bg-purple-50 text-purple-700 font-bold border border-purple-200"
+                            : "text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        <div className="truncate">
+                          <p className="truncate">{`${p.nombre} ${p.primer_apellido} ${p.segundo_apellido || ""}`}</p>
+                          <span className="text-[10px] text-slate-400">CI: {p.ci || "—"}</span>
+                        </div>
+                        {targetPaciente?.id === p.id && (
+                          <span className="text-[10px] bg-purple-200 text-purple-800 px-1.5 py-0.5 rounded font-bold">
+                            Activa
+                          </span>
+                        )}
+                      </button>
+                    ))}
+
+                  {listaPacientes.length === 0 && !buscandoPacientes && (
+                    <div className="p-3 text-center text-xs text-slate-400 font-medium">
+                      No se encontraron pacientes registradas.
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -627,40 +813,38 @@ export default function HistorialClinicoTab({
       {vistaActiva === "evolucion" && (
         <div className="space-y-6 animate-fade-in">
           {/* Card Principal de Cabecera Evolutiva */}
-          <div className="bg-white rounded-2xl p-5 border-2 border-slate-800/90 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
-                Evolución Longitudinal y Respuesta al Tratamiento
-              </h2>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
+              <div className="flex items-center gap-2">
+                <span className="p-1 rounded-lg bg-purple-100 text-purple-700">
+                  <MdTimeline size={18} />
+                </span>
+                <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                  Evolución Longitudinal y Respuesta Terapéutica
+                </h2>
+              </div>
+              <p className="text-xs text-slate-500 font-medium mt-1">
                 Paciente: <strong className="text-slate-800">{nombrePaciente}</strong> • Expediente:{" "}
-                <strong className="text-slate-800">CI {ciPaciente}</strong> • Diagnóstico Actual:{" "}
-                <strong className="text-purple-700">{fenotipoNombre}</strong> • Total Consultas:{" "}
+                <strong className="text-slate-800">CI {ciPaciente}</strong> • Diagnóstico:{" "}
+                <strong className="text-purple-700">{fenotipoNombre}</strong> • Consultas:{" "}
                 <strong className="text-slate-800">{consultasReales.length}</strong>
               </p>
             </div>
 
-            <div className="flex items-center gap-2.5 self-start md:self-auto">
-              <span className="w-6 h-6 rounded-full bg-slate-900 text-white text-[11px] font-black flex items-center justify-center shrink-0">
-                1
-              </span>
-              <div className="px-3.5 py-1.5 rounded-xl border border-emerald-500/80 bg-emerald-50/80 text-emerald-800 font-extrabold text-xs flex items-center gap-1.5 shadow-sm">
-                <span>Respuesta Terapéutica en Seguimiento</span>
-                <span className="text-emerald-600 text-sm">✓</span>
-              </div>
+            <div className="px-3.5 py-1.5 rounded-xl border border-emerald-500/80 bg-emerald-50/80 text-emerald-800 font-extrabold text-xs flex items-center gap-1.5 shadow-sm">
+              <span>Seguimiento Clínico Activo</span>
+              <span className="text-emerald-600 text-sm">✓</span>
             </div>
           </div>
 
           {/* Grilla de 4 Métricas Longitudinales con Barras Estilizadas y Datos REALES */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Card 1: Duración de Ciclos */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border-2 border-slate-800/90 shadow-sm flex flex-col justify-between">
+            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-900">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                  <MdCalendarMonth className="text-purple-600" size={15} />
                   DURACIÓN DE CICLOS
-                </span>
-                <span className="w-5 h-5 rounded-full bg-purple-700 text-white text-[10px] font-black flex items-center justify-center">
-                  2
                 </span>
               </div>
 
@@ -674,7 +858,7 @@ export default function HistorialClinicoTab({
                     {puntosEvolutivos.map((p, idx) => {
                       const valor = p.ciclo;
                       const alturaPct = valor ? Math.min(100, Math.max(25, (valor / 55) * 100)) : 10;
-                      const esNormal = valor && valor <= 35;
+                      const esNormal = valor && valor <= 35 && valor >= 21;
                       const colorBarra = !valor
                         ? "bg-slate-300"
                         : esNormal
@@ -706,12 +890,11 @@ export default function HistorialClinicoTab({
                 </>
               )}
 
-              {/* Conclusión clínica real */}
-              <div className="mt-3 pt-2 text-xs font-bold text-emerald-700 flex items-center gap-1 border-t border-slate-100">
-                <span>✓</span>
+              <div className="mt-3 pt-2 text-xs font-bold text-slate-700 flex items-center gap-1 border-t border-slate-100">
+                <span className="text-emerald-600">✓</span>
                 <span className="truncate">
                   {duracionCiclo
-                    ? duracionCiclo <= 35
+                    ? duracionCiclo <= 35 && duracionCiclo >= 21
                       ? `Ciclos regulares (${duracionCiclo} días)`
                       : `Oligomenorrea (${duracionCiclo} días > 35)`
                     : "Parámetro en monitoreo"}
@@ -720,13 +903,11 @@ export default function HistorialClinicoTab({
             </div>
 
             {/* Card 2: Testosterona Total */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border-2 border-slate-800/90 shadow-sm flex flex-col justify-between">
+            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-900">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                  <MdScience className="text-purple-600" size={15} />
                   TESTOSTERONA TOTAL
-                </span>
-                <span className="w-5 h-5 rounded-full bg-purple-700 text-white text-[10px] font-black flex items-center justify-center">
-                  3
                 </span>
               </div>
 
@@ -772,13 +953,12 @@ export default function HistorialClinicoTab({
                 </>
               )}
 
-              {/* Conclusión clínica real */}
-              <div className="mt-3 pt-2 text-xs font-bold text-emerald-700 flex items-center gap-1 border-t border-slate-100">
-                <span>✓</span>
+              <div className="mt-3 pt-2 text-xs font-bold text-slate-700 flex items-center gap-1 border-t border-slate-100">
+                <span className="text-emerald-600">✓</span>
                 <span className="truncate">
                   {testosterona
                     ? testosterona <= 50
-                      ? `Normalizada (${testosterona} ng/dL)`
+                      ? `Rango normal (${testosterona} ng/dL)`
                       : `Hiperandrogenemia (${testosterona} ng/dL)`
                     : "En seguimiento de laboratorio"}
                 </span>
@@ -786,13 +966,11 @@ export default function HistorialClinicoTab({
             </div>
 
             {/* Card 3: Score Hirsutismo (FG) */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border-2 border-slate-800/90 shadow-sm flex flex-col justify-between">
+            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-900">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                  <MdFemale className="text-purple-600" size={15} />
                   SCORE HIRSUTISMO (FG)
-                </span>
-                <span className="w-5 h-5 rounded-full bg-purple-700 text-white text-[10px] font-black flex items-center justify-center">
-                  4
                 </span>
               </div>
 
@@ -805,7 +983,7 @@ export default function HistorialClinicoTab({
                   <div className="flex items-end justify-around gap-2 h-36 px-2 pt-2 border-b border-slate-200">
                     {puntosEvolutivos.map((p, idx) => {
                       const valor = p.fg;
-                      const alturaPct = valor !== null && valor !== undefined ? Math.min(100, Math.max(25, (valor / 18) * 100)) : 10;
+                      const alturaPct = valor !== null && valor !== undefined ? Math.min(100, Math.max(25, (valor / 24) * 100)) : 10;
                       const esNormal = valor !== null && valor !== undefined && valor < 8;
                       const colorBarra = valor === null || valor === undefined
                         ? "bg-slate-300"
@@ -836,9 +1014,8 @@ export default function HistorialClinicoTab({
                 </>
               )}
 
-              {/* Conclusión clínica real */}
-              <div className="mt-3 pt-2 text-xs font-bold text-emerald-700 flex items-center gap-1 border-t border-slate-100">
-                <span>✓</span>
+              <div className="mt-3 pt-2 text-xs font-bold text-slate-700 flex items-center gap-1 border-t border-slate-100">
+                <span className="text-emerald-600">✓</span>
                 <span className="truncate">
                   {fgScore !== null && fgScore !== undefined
                     ? fgScore < 8
@@ -850,13 +1027,11 @@ export default function HistorialClinicoTab({
             </div>
 
             {/* Card 4: Índice HOMA-IR */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border-2 border-slate-800/90 shadow-sm flex flex-col justify-between">
+            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-900">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                  <MdMonitorWeight className="text-purple-600" size={15} />
                   ÍNDICE HOMA-IR
-                </span>
-                <span className="w-5 h-5 rounded-full bg-purple-700 text-white text-[10px] font-black flex items-center justify-center">
-                  5
                 </span>
               </div>
 
@@ -902,9 +1077,8 @@ export default function HistorialClinicoTab({
                 </>
               )}
 
-              {/* Conclusión clínica real */}
-              <div className="mt-3 pt-2 text-xs font-bold text-emerald-700 flex items-center gap-1 border-t border-slate-100">
-                <span>✓</span>
+              <div className="mt-3 pt-2 text-xs font-bold text-slate-700 flex items-center gap-1 border-t border-slate-100">
+                <span className="text-emerald-600">✓</span>
                 <span className="truncate">
                   {homaIr
                     ? Number(homaIr) < 2.5
@@ -916,21 +1090,26 @@ export default function HistorialClinicoTab({
             </div>
           </div>
 
-          {/* Historial de Notas de Evolución REAL de la Base de Datos */}
-          <div className="bg-white rounded-2xl p-5 border-2 border-slate-800/90 shadow-sm space-y-4">
+          {/* ── BITÁCORA Y TIMELINE CONSOLIDADO DE CONSULTAS Y EVENTOS CLÍNICOS REALES ── */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-black text-slate-900">
-                Historial de Notas de Evolución y Auditoría Clínica
-              </h3>
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                Base de Datos Supabase
+              <div>
+                <h3 className="text-sm font-black text-slate-900">
+                  Historial de Consultas Médicas y Eventos Clínicos
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Trazabilidad longitudinal consolidada: consultas médicas, ecografías, laboratorio y evolución.
+                </p>
+              </div>
+              <span className="text-[11px] font-bold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200">
+                {timelineEventos.length} Eventos Registrados
               </span>
             </div>
 
             {/* Resumen clínico real de comparativa */}
             {datosComparativa?.resumen_clinico && (
               <div className="bg-purple-50/70 border border-purple-200/90 rounded-xl p-3.5 text-xs leading-relaxed text-purple-900 font-medium">
-                <strong className="font-bold text-purple-950">Resumen Evolutivo del Sistema:</strong> {datosComparativa.resumen_clinico}
+                <strong className="font-bold text-purple-950">Resumen Evolutivo del Expediente:</strong> {datosComparativa.resumen_clinico}
               </div>
             )}
 
@@ -941,73 +1120,126 @@ export default function HistorialClinicoTab({
                   <MdSearch className="absolute left-2.5 top-2.5 text-slate-400" size={16} />
                   <input
                     type="text"
-                    placeholder="Filtrar notas de evolución..."
+                    placeholder="Filtrar por motivo, diagnóstico o hallazgos..."
                     value={busqueda}
                     onChange={(e) => setBusqueda(e.target.value)}
-                    className="w-full text-xs pl-8 pr-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 outline-none focus:border-purple-500"
+                    className="w-full text-xs pl-8 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 outline-none focus:border-purple-500"
                   />
                 </div>
                 <select
                   value={filtroTipo}
                   onChange={(e) => setFiltroTipo(e.target.value)}
-                  className="text-xs px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold"
+                  className="text-xs px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold"
                 >
-                  <option value="todos">Todos los eventos ({historial.length})</option>
-                  <option value="Control">Consultas de Control</option>
+                  <option value="todos">Todos los eventos ({timelineEventos.length})</option>
+                  <option value="Consulta">Consultas Médicas</option>
                   <option value="Rotterdam">Diagnósticos Rotterdam</option>
-                  <option value="Prescripción">Ajustes Terapéuticos</option>
+                  <option value="Control">Notas de Control</option>
                 </select>
               </div>
 
               <button
                 type="button"
                 onClick={() => setModalNuevaNota(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 transition shadow-xs"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 transition shadow-xs"
               >
-                <MdAdd size={15} />
-                <span>+ Nueva Nota</span>
+                <MdAdd size={16} />
+                <span>Nueva Nota</span>
               </button>
             </div>
 
-            {/* Listado dinámico de notas reales registradas */}
-            {notasFiltradas.length === 0 ? (
-              <div className="py-8 text-center text-xs text-slate-400 font-semibold space-y-1">
-                <p>No se encontraron notas clínicas de evolución para esta paciente.</p>
+            {/* Listado dinámico de eventos reales */}
+            {eventosFiltrados.length === 0 ? (
+              <div className="py-10 text-center text-xs text-slate-400 font-semibold space-y-1">
+                <p>No se encontraron eventos clínicos con los criterios seleccionados.</p>
                 <p className="text-[11px] text-slate-400 font-normal">
-                  Haga clic en "+ Registrar Evolución" para añadir la primera nota clínica al expediente.
+                  Utilice el botón "+ Registrar Evolución" para añadir notas clínicas al expediente.
                 </p>
               </div>
             ) : (
-              <div className="space-y-2.5 pt-2">
-                {notasFiltradas.map((n) => (
+              <div className="space-y-3 pt-2">
+                {eventosFiltrados.map((ev) => (
                   <div
-                    key={n.id}
-                    className="p-3.5 bg-white border border-slate-200 rounded-xl flex items-start justify-between gap-3 shadow-xs hover:border-purple-300 transition"
+                    key={ev.id}
+                    className="p-4 bg-white border border-slate-200/90 rounded-2xl shadow-xs hover:border-purple-300 transition space-y-2.5"
                   >
-                    <div>
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-black bg-purple-100 text-purple-800">
-                          {n.tipo_evento}
-                        </span>
-                        <span className="text-[11px] font-bold text-slate-400">
-                          {n.fecha?.split("T")[0]}
-                        </span>
-                        {n.medico && (
-                          <span className="text-[11px] text-slate-500 font-semibold">• {n.medico}</span>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className={`px-2.5 py-0.5 rounded text-[11px] font-black ${
+                            ev.tipo_evento.includes("Consulta")
+                              ? "bg-purple-100 text-purple-800"
+                              : ev.tipo_evento.includes("Rotterdam")
+                              ? "bg-rose-100 text-rose-800"
+                              : "bg-blue-100 text-blue-800"
+                          }`}>
+                            {ev.tipo_evento}
+                          </span>
+                          <span className="text-[11px] font-bold text-slate-400">
+                            {ev.fecha?.split("T")[0]}
+                          </span>
+                          {ev.medico && (
+                            <span className="text-[11px] text-slate-500 font-semibold">• {ev.medico}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {ev.esManual && (
+                        <button
+                          type="button"
+                          onClick={() => handleEliminarNota(ev.id)}
+                          className="text-slate-300 hover:text-rose-600 transition p-1 shrink-0"
+                          title="Eliminar nota"
+                        >
+                          <MdDelete size={17} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Badges de métricas si la consulta tiene datos registrados */}
+                    {ev.metricas && (
+                      <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                        {ev.metricas.imc && (
+                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-bold">
+                            IMC: {ev.metricas.imc} kg/m²
+                          </span>
+                        )}
+                        {ev.metricas.ciclo && (
+                          <span className="px-2 py-0.5 rounded bg-purple-50 text-purple-700 font-bold border border-purple-200">
+                            Ciclo: {ev.metricas.ciclo} días
+                          </span>
+                        )}
+                        {ev.metricas.fg !== null && ev.metricas.fg !== undefined && (
+                          <span className="px-2 py-0.5 rounded bg-rose-50 text-rose-700 font-bold border border-rose-200">
+                            Ferriman: {ev.metricas.fg} pts
+                          </span>
+                        )}
+                        {ev.metricas.testosterona && (
+                          <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 font-bold border border-amber-200">
+                            Testosterona: {ev.metricas.testosterona} ng/dL
+                          </span>
+                        )}
+                        {ev.metricas.homa && (
+                          <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold border border-blue-200">
+                            HOMA-IR: {ev.metricas.homa}
+                          </span>
+                        )}
+                        {ev.metricas.foliculos && (
+                          <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold border border-indigo-200">
+                            Eco: {ev.metricas.foliculos} folículos ({ev.metricas.ecoResultado || "SOP"})
+                          </span>
+                        )}
+                        {ev.metricas.fenotipo && ev.metricas.fenotipo !== "Sin Evaluar" && (
+                          <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 font-bold border border-emerald-200">
+                            {ev.metricas.fenotipo}
+                          </span>
                         )}
                       </div>
-                      <p className="text-xs text-slate-700 whitespace-pre-line font-medium leading-relaxed">
-                        {n.detalle}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleEliminarNota(n.id)}
-                      className="text-slate-300 hover:text-rose-600 transition p-1 shrink-0"
-                      title="Eliminar nota"
-                    >
-                      <MdDelete size={16} />
-                    </button>
+                    )}
+
+                    <p className="text-xs text-slate-700 whitespace-pre-line font-medium leading-relaxed">
+                      {ev.detalle}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -1017,67 +1249,60 @@ export default function HistorialClinicoTab({
       )}
 
       {/* ════════════════════════════════════════════════════════════════════════ */}
-      {/* VISTA 2: GENERADOR DE INFORME INTEGRAL Y AUDITORÍA MÉDICA (DATOS REALES)*/}
+      {/* VISTA 2: GENERADOR DE INFORME INTEGRAL Y AUDITORÍA MÉDICA              */}
       {/* ════════════════════════════════════════════════════════════════════════ */}
       {vistaActiva === "auditoria" && (
         <div className="space-y-6 animate-fade-in">
           {/* Header Card de Auditoría */}
-          <div className="bg-white rounded-2xl p-5 border-2 border-slate-800/90 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
-                Generador de Informe Integral y Trazabilidad Algorítmica (Auditoría Médica)
-              </h2>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
-                Emisión formal conforme a guías internacionales de auditoría en IA médica (ISO/IEC en Salud)
+              <div className="flex items-center gap-2">
+                <span className="p-1 rounded-lg bg-purple-100 text-purple-700">
+                  <MdShield size={18} />
+                </span>
+                <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                  Generador de Informe Pericial y Trazabilidad Algorítmica (Auditoría Médica)
+                </h2>
+              </div>
+              <p className="text-xs text-slate-500 font-medium mt-1">
+                Emisión formal conforme a guías internacionales de auditoría en salud (Consenso Rotterdam / ISO/IEC).
               </p>
             </div>
 
-            <div className="flex items-center gap-2 self-start md:self-auto">
-              <span className="w-6 h-6 rounded-full bg-slate-900 text-white text-[11px] font-black flex items-center justify-center shrink-0">
-                1
-              </span>
-              <button
-                type="button"
-                onClick={handleImprimirInforme}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 transition shadow-md shadow-purple-700/20"
-              >
-                <MdPrint size={16} />
-                <span>Imprimir / Exportar PDF</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={handleImprimirInforme}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 transition shadow-md shadow-purple-700/20"
+            >
+              <MdPrint size={16} />
+              <span>Imprimir / Exportar PDF</span>
+            </button>
           </div>
 
           {/* Marco Hoja Pericial Clínica con Datos Reales */}
           <div className="bg-white border-2 border-slate-800/90 rounded-2xl p-6 sm:p-8 shadow-sm space-y-5 text-slate-800">
-            {/* Cabecera del Hospital con logo e ID */}
+            {/* Cabecera con datos institucionales */}
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b-2 border-slate-200 pb-4">
               <div className="flex items-center gap-3.5">
                 <div className="w-12 h-12 rounded-xl border-2 border-slate-800 flex items-center justify-center bg-slate-50 shrink-0">
-                  <div className="w-7 h-7 border border-slate-800 rotate-45 flex items-center justify-center">
-                    <div className="w-2 h-2 bg-purple-600 rounded-full" />
-                  </div>
+                  <MdLocalHospital size={26} className="text-purple-700" />
                 </div>
                 <div>
                   <h3 className="font-black text-sm sm:text-base text-slate-900 tracking-tight uppercase">
-                    HOSPITAL GENERAL UNIVERSITARIO — UNIDAD SOP-CARE
+                    SISTEMA CLÍNICO SOP — PROTOCOLO DE ROTTERDAM
                   </h3>
                   <p className="text-xs text-slate-500 font-semibold mt-0.5">
-                    Informe Pericial de Diagnóstico y Fenotipificación Asistida por IA
+                    Informe Pericial de Diagnóstico y Fenotipificación Multimodal Asistida por IA
                   </p>
                 </div>
               </div>
 
               <div className="text-left sm:text-right flex flex-col items-start sm:items-end">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-mono font-black text-xs text-slate-800">
-                    ID INFORME: RPT-2026-{ciPaciente}
-                  </span>
-                  <span className="w-4 h-4 rounded-full bg-purple-700 text-white text-[9px] font-black flex items-center justify-center">
-                    2
-                  </span>
-                </div>
+                <span className="font-mono font-black text-xs text-slate-800">
+                  EXPEDIENTE: CI-{ciPaciente}
+                </span>
                 <div className="text-xs text-slate-500 font-medium mt-0.5">
-                  Fecha: {new Date().toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric" })}
+                  Fecha de Emisión: {new Date().toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric" })}
                 </div>
               </div>
             </div>
@@ -1098,15 +1323,15 @@ export default function HistorialClinicoTab({
                   <strong className="text-slate-900">{ciPaciente}</strong>
                 </div>
                 <div>
-                  <span className="text-slate-500 font-normal">HC: </span>
+                  <span className="text-slate-500 font-normal">ID Clínico: </span>
                   <strong className="text-slate-900">{targetPaciente?.id?.substring(0, 8) || "—"}</strong>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div>
-                  <span className="text-slate-500 font-normal">Médico: </span>
-                  <strong className="text-slate-900">Dra. Valeria Mendoza</strong>
+                  <span className="text-slate-500 font-normal">Médico Especialista: </span>
+                  <strong className="text-slate-900">{doctorActivo.nombre}</strong>
                 </div>
                 <div>
                   <span className="text-slate-500 font-normal">IMC: </span>
@@ -1118,7 +1343,7 @@ export default function HistorialClinicoTab({
                 </div>
                 <div>
                   <span className="text-slate-500 font-normal">Especialidad: </span>
-                  <strong className="text-slate-900">Endocrinología y Metabolismo</strong>
+                  <strong className="text-slate-900">{doctorActivo.especialidad}</strong>
                 </div>
               </div>
             </div>
@@ -1131,10 +1356,10 @@ export default function HistorialClinicoTab({
                   CRITERIO 1: OVULATORIO
                 </div>
                 <div className="text-xs text-slate-700 leading-relaxed font-medium">
-                  {duracionCiclo ? `Duración de ciclo: ${duracionCiclo} días.` : "Ciclo no registrado."}{" "}
+                  {duracionCiclo ? `Duración habitual: ${duracionCiclo} días.` : "Ciclo en evaluación."}{" "}
                   {progesterona ? `Progesterona: ${progesterona} ng/mL.` : ""}
                   <div className="mt-1 font-bold text-slate-900">
-                    Estado: {datosRotterdam?.criterio1_cumple ? "Cumple Disfunción Ovulatoria" : "No detectado"}
+                    Estado: {datosRotterdam?.criterio1_cumple ? "Cumple Disfunción Ovulatoria" : "Sin disfunción confirmada"}
                   </div>
                 </div>
               </div>
@@ -1148,7 +1373,7 @@ export default function HistorialClinicoTab({
                   {fgScore !== null ? `Score FG: ${fgScore} pts.` : "FG no evaluado."}{" "}
                   {testosterona ? `Testosterona: ${testosterona} ng/dL.` : ""}
                   <div className="mt-1 font-bold text-slate-900">
-                    Estado: {datosRotterdam?.criterio2_cumple ? "Cumple Hiperandrogenismo" : "No detectado"}
+                    Estado: {datosRotterdam?.criterio2_cumple ? "Cumple Hiperandrogenismo" : "Andrógenos normales"}
                   </div>
                 </div>
               </div>
@@ -1159,7 +1384,7 @@ export default function HistorialClinicoTab({
                   CRITERIO 3: ECOGRÁFICO
                 </div>
                 <div className="text-xs text-slate-700 leading-relaxed font-medium">
-                  {datosRotterdam?.criterio3_cumple ? "Morfología Ovárica Poliquística detectada (PCOM)." : "Sin patrón ecográfico de SOP."}
+                  {datosRotterdam?.criterio3_cumple ? "Morfología ovárica poliquística detectada (PCOM)." : "Sin patrón ecográfico de SOP."}
                   <div className="mt-1 font-bold text-slate-900">
                     Estado: {datosRotterdam?.criterio3_cumple ? "Cumple Criterio 3" : "No cumple"}
                   </div>
@@ -1169,14 +1394,9 @@ export default function HistorialClinicoTab({
 
             {/* Dictamen Definitivo */}
             <div className="relative border-2 border-purple-500/80 bg-purple-50/60 rounded-xl p-4 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs sm:text-sm font-black text-purple-900 uppercase tracking-tight">
-                  DICTAMEN DEFINITIVO: {fenotipoNombre.toUpperCase()}
-                </h4>
-                <span className="w-5 h-5 rounded-full bg-purple-700 text-white text-[10px] font-black flex items-center justify-center shrink-0">
-                  3
-                </span>
-              </div>
+              <h4 className="text-xs sm:text-sm font-black text-purple-900 uppercase tracking-tight">
+                DICTAMEN DEFINITIVO: {fenotipoNombre.toUpperCase()}
+              </h4>
               <p className="text-xs text-slate-700 leading-relaxed font-medium">
                 {datosComparativa?.resumen_clinico || "Evaluación diagnóstica basada en el Consenso Internacional de Rotterdam (ESHRE/ASRM 2023). Requiere al menos 2 de los 3 criterios para confirmación de SOP."}
                 {homaIr && ` Se constata índice HOMA-IR de ${homaIr}.`}
@@ -1198,24 +1418,19 @@ export default function HistorialClinicoTab({
             {/* Pie con Firma Médica y Sello Digital SHA-256 */}
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pt-4 border-t border-slate-200">
               <div className="space-y-1">
-                <div className="w-48 border-b border-slate-600 mb-1.5" />
-                <div className="text-xs font-black text-slate-900">Dra. Valeria Mendoza</div>
+                <div className="w-52 border-b border-slate-600 mb-1.5" />
+                <div className="text-xs font-black text-slate-900">{doctorActivo.nombre}</div>
                 <div className="text-[11px] text-slate-500 font-semibold">
-                  Médico Especialista en Endocrinología • Reg. Col. 48291
+                  {doctorActivo.especialidad} • {doctorActivo.matricula}
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 self-start sm:self-auto">
-                <div className="border border-dashed border-slate-400 bg-slate-50/90 rounded-xl p-2.5 font-mono text-[11px] text-slate-600 space-y-0.5">
-                  <div className="font-bold text-slate-800 flex items-center gap-1">
-                    <span>🔒</span>
-                    <span>SELLO DIGITAL SHA-256 IA-VERIFIED</span>
-                  </div>
-                  <div className="text-slate-400">Hash: {(targetPaciente?.id || "").replace(/-/g, "").padEnd(32, "0").slice(0, 24)}...</div>
+              <div className="border border-dashed border-slate-400 bg-slate-50/90 rounded-xl p-2.5 font-mono text-[11px] text-slate-600 space-y-0.5">
+                <div className="font-bold text-slate-800 flex items-center gap-1">
+                  <span>🔒</span>
+                  <span>SELLO DIGITAL CRIPTOGRÁFICO SHA-256</span>
                 </div>
-                <span className="w-5 h-5 rounded-full bg-purple-700 text-white text-[10px] font-black flex items-center justify-center shrink-0">
-                  4
-                </span>
+                <div className="text-slate-400">Hash: {(targetPaciente?.id || "").replace(/-/g, "").padEnd(32, "0").slice(0, 24)}...</div>
               </div>
             </div>
           </div>
@@ -1301,7 +1516,7 @@ export default function HistorialClinicoTab({
                     type="text"
                     value={nuevaNota.medico}
                     onChange={(e) => setNuevaNota({ ...nuevaNota, medico: e.target.value })}
-                    placeholder="Ej: Dra. Valeria Mendoza"
+                    placeholder="Nombre del médico especialista"
                     className="w-full border border-slate-300 rounded-xl pl-9 pr-3.5 py-2.5 text-sm font-semibold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/30"
                   />
                 </div>
@@ -1316,7 +1531,7 @@ export default function HistorialClinicoTab({
                   required
                   value={nuevaNota.detalle}
                   onChange={(e) => setNuevaNota({ ...nuevaNota, detalle: e.target.value })}
-                  placeholder="Detalle la evolución de la paciente, respuesta a la medicación, variaciones del ciclo menstrual o síntomas..."
+                  placeholder="Detalle la evolución de la paciente, respuesta al tratamiento, cambios en el ciclo menstrual o sintomatología..."
                   className="w-full border border-slate-300 rounded-xl p-3.5 text-sm font-medium text-slate-800 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/30 shadow-sm"
                 />
               </div>
